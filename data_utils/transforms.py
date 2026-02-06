@@ -43,6 +43,7 @@ class RandomCrop(object):
 
     def __call__(self, sample):
         img = sample['image']
+        
         landmarks = sample['landmarks']
 
         # Initialize min and max coordinates for landmarks
@@ -61,9 +62,15 @@ class RandomCrop(object):
                     max_[i] = landmark[i]
 
         # Calculate the maximum zoom rates based on landmarks
-        zoom_max = [self.size[0] / (max_[0] - min_[0]) - 0.02,
-                    self.size[1] / (max_[1] - min_[1]) - 0.02,
-                    self.size[2] / (max_[2] - min_[2]) - 0.04]
+        #zoom_max = [self.size[0] / (max_[0] - min_[0]) - 0.02,
+        #            self.size[1] / (max_[1] - min_[1]) - 0.02,
+        #            self.size[2] / (max_[2] - min_[2]) - 0.04]
+        zoom_max = []  
+        for i in range(3):  
+            if max_[i] - min_[i] > 0:  
+                zoom_max.append(self.size[i] / (max_[i] - min_[i]) - (0.02 if i < 2 else 0.04))  
+            else:  
+                zoom_max.append(1.0)
 
         ######################### zoom out #############################
         random_rate0 = np.random.uniform(self.min_rate, min(zoom_max[0], 1))
@@ -137,6 +144,7 @@ class RandomCrop(object):
         # Adjust landmarks based on the new crop coordinates
         pre_new_landmarks = []
         for landmark in landmarks:
+
             cur_landmark = landmark - np.array([cc, ch, cw])
             pre_new_landmarks.append(cur_landmark)
 
@@ -145,7 +153,7 @@ class RandomCrop(object):
         return sample
 
 class LandmarkProposal(object):
-    def __init__(self, size=[128, 128, 64], shrink=4., anchors=[0.5, 0.75, 1., 1.25], max_num=400):
+    def __init__(self, size=[128, 128, 64], shrink=4., anchors=[0.5, 0.75, 1., 1.25], max_num=400): # original size: [128, 128, 64] -> I need [128, 128, 128]
         self.size = size
         self.shrink = shrink
         self.anchors = anchors

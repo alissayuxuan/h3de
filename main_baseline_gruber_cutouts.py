@@ -13,7 +13,8 @@ from torch import optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from data_utils.dataloader import Molar3D
+#from data_utils.dataloader import Molar3D
+from data_utils.spine_dataloader import VertebraePOI
 import data_utils.transforms as tr
 from utils import setgpu, metric
 from data_utils.transforms import LandMarkToGaussianHeatMap
@@ -38,9 +39,9 @@ parser.add_argument('--resume',default='',type=str)
 # the weight decay
 parser.add_argument('--weight-decay','--wd',default=0.0005,type=float)
 # the path to save the model parameters
-parser.add_argument('--save_dir',default='./SavePath/baseline',type=str)
+parser.add_argument('--save_dir',default='./SavePath/baseline_gruber',type=str)
 # the settings of gpus, multiGPU can use '0,1' or '0,1,2,3'
-parser.add_argument('--gpu', default='6', type=str)
+parser.add_argument('--gpu', default='0', type=str)
 # the early stop parameter
 parser.add_argument('--patient',default=20,type=int)
 # the loss HNM_heatmap for baseline heatmap regression, HNM_propmap for yolol
@@ -48,16 +49,18 @@ parser.add_argument('--loss_name', default='HNM_heatmap',type=str)
 # the path of dataset
 # before training please download the dataset and put it in "../mmld_dataset"
 parser.add_argument('--data_path',
-                    default='./mmld_dataset_complete',
+                    default='./gruber_dataset_cutouts',
                     type=str,
                     metavar='N',
                     help='data path')
 # the classes
-parser.add_argument('--n_class',default=14,type=int, help='number of landmarks 14')
+parser.add_argument('--n_class',default=35,type=int, help='number of landmarks 35')
 # the radius of gaussian heatmap's mask
 parser.add_argument('-R','--focus_radius', default=20,type=int)
 # the test flag | -1 for train, 0 for eval, 1 for test |
 parser.add_argument('--test_flag',default=-1,type=int, choices=[-1, 0, 1])
+parser.add_argument('--master_df_path', default='./gruber_dataset_cutouts/cutouts/master_df.csv',type=str)
+
 
 
 DEVICE = torch.device("cuda" if True else "cpu")
@@ -90,6 +93,7 @@ def main(args):
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98, last_epoch=-1)
 
 
+    master_df = pd.read_csv(args.master_df_path)
     ########################## network testing ########################################
     # if the test_flag > -1, calculate the MRE and SDR (%) for val and test set
     if args.test_flag > -1:
@@ -98,7 +102,7 @@ def main(args):
         if args.test_flag == 0:
             test_transform = transforms.Compose([
                 tr.RandomCrop(size=[128,128,64]), # 
-                tr.Normalize(),
+                #tr.Normalize(),
                 tr.ToTensor(),
                 ])
             phase = 'val'
@@ -106,17 +110,26 @@ def main(args):
             # print("test000000000")
             test_transform = transforms.Compose([
                 tr.CenterCrop(size=[128,128,64]), # center crop for validation
-                tr.Normalize(),
+                #tr.Normalize(),
                 tr.ToTensor(),
                 ])
             phase = 'test'
-        test_dataset = Molar3D(transform=test_transform,
-                      phase=phase,
-                      parent_path=args.data_path)
+        #test_dataset = Molar3D(transform=test_transform,
+        #              phase=phase,
+        #              parent_path=args.data_path)
+
+        test_dataset = VertebraePOI(
+            master_df=master_df,
+            transform=test_transform,
+            phase=phase
+        )
         testloader = DataLoader(test_dataset,
                                  batch_size=1,
                                  shuffle=False,
                                  num_workers=4)
+        
+        os.makedirs("./hz_baseline_gruber_all/", exist_ok=True) # added by alissa
+
         test(testloader, net)
         return
         
@@ -133,12 +146,19 @@ def main(args):
     # train set and validation set preprocessing
     train_transform = transforms.Compose([
         tr.RandomCrop(size=[128,128,64]), # zoom and random crop for data augumentation
-        tr.Normalize(),
+        #tr.Normalize(),
         tr.ToTensor(),
     ])
-    train_dataset = Molar3D(transform=train_transform,
-                      phase='train',
-                      parent_path=args.data_path)
+    #train_dataset = Molar3D(transform=train_transform,
+    #                  phase='train',
+    #                  parent_path=args.data_path)
+
+    train_dataset = VertebraePOI(
+        master_df=master_df,
+        transform=train_transform,
+        phase='train',
+    )
+
     trainloader = DataLoader(train_dataset,
                              batch_size=args.batch_size,
                              shuffle=True,
@@ -146,18 +166,27 @@ def main(args):
 
     eval_transform = transforms.Compose([
         tr.CenterCrop(size=[128,128,64]), # center crop for validation
-        tr.Normalize(),
+        #tr.Normalize(),
         tr.ToTensor(),
     ])
-    eval_dataset = Molar3D(transform=eval_transform,
-                      phase='val',
-                      parent_path=args.data_path)
+    #eval_dataset = Molar3D(transform=eval_transform,
+    #                  phase='val',
+    #                  parent_path=args.data_path)
+
+    eval_dataset = VertebraePOI(
+        master_df=master_df,
+        transform=eval_transform,
+        phase='val'
+    )
+
     evalloader = DataLoader(eval_dataset,
                             batch_size=args.batch_size,
                             shuffle=False,
                             num_workers=8)
 
 
+    # TODO: ICH BIN HIER (REST NOCH VERBESSERN!!!)
+    
     ########################## network training ##########################################
     # begin training here
     break_flag = 0. # counting for early stop
@@ -277,8 +306,12 @@ def test(dataloader, net):
     
     ################################ molar print##############################################
     names = [
-            'L0','La', 'Lb', 'Lc', 'Ld', 'Le', 'Lf', 'R0', 'Ra','Rb','Rc','Rd','Re','Rf'
-            ]
+        '81', '82', '83', '84', '85', '86', '87', '88', '89',
+        '101', '102', '103', '104', '105', '106', '107', '108',
+        '109', '110', '111', '112', '113', '114', '115', '116',
+        '117', '118', '119', '120', '121', '122', '123', '124',
+        '125', '127'
+        ]
 
     IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
     form = {"metric": IDs}
@@ -304,7 +337,7 @@ def test(dataloader, net):
     for i, name in enumerate(names):
         form[name] = total[:, i]
     df = pd.DataFrame(form, columns = form.keys())
-    df.to_excel( 'baseline_test.xlsx', index = False, header=True)
+    df.to_excel( 'baseline_gruber_test.xlsx', index = False, header=True)
 
     ########################### total mre ######################################################
     mmre = np.mean(total_mean_mre)
@@ -324,6 +357,8 @@ def test(dataloader, net):
     )
     
 if __name__ == '__main__':
+
+    """
     global args
     args = parser.parse_args()
     if not os.path.exists(args.save_dir):
@@ -340,6 +375,64 @@ if __name__ == '__main__':
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     logging.getLogger().addHandler(console)
+    """
+
+    import sys  # ← WICHTIG: sys importieren!
+    
+    global args
+    args = parser.parse_args()
+    
+    # Create directories
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    args.save_dir = os.path.join(args.save_dir, args.model_name)
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+    
+    log_file = os.path.join(args.save_dir, 'log.txt')
+    
+    # ==================== NEUES LOGGING SETUP ====================
+    # 1. Root Logger aufräumen
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(logging.INFO)
+    
+    # 2. Formatter definieren
+    formatter = logging.Formatter(
+        fmt='%(asctime)s,%(lineno)d: %(message)s',
+        datefmt='%Y-%m-%d(%a)%H:%M:%S'
+    )
+    
+    # 3. File Handler
+    file_handler = logging.FileHandler(log_file, mode='a')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+    
+    # 4. Console Handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    # =============================================================
+    
+    # Info ausgeben
+    print("\n" + "="*80)
+    print("Training Configuration")
+    print(f"  Log file: {log_file}")
+    print(f"  Model: {args.model_name}")
+    print(f"  GPU: {args.gpu}")
+    print(f"  Batch size: {args.batch_size}")
+    print(f"  Learning rate: {args.lr}")
+    print(f"  Epochs: {args.epochs}")
+    print("="*80 + "\n")
+    
+    # Initial logging
+    logging.info("="*80)
+    logging.info("Training script started")
+    logging.info(f"Configuration: {args}")
+    logging.info("="*80)
+
     main(args)
     
     

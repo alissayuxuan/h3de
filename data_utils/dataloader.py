@@ -43,6 +43,8 @@ class Molar3D(Dataset):
         _spacing = np.load(self.spacing[index])
         _filename = self.filename[index]
         sample = {'image': _img, 'landmarks': _landmark, 'spacing':_spacing,'filename':_filename }
+        print(f"Loading sample: {sample}")
+        
         if self.transform is not None:
             sample = self.transform(sample)
         return sample

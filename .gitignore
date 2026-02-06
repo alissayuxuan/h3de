@@ -1,0 +1,28 @@
+# Datasets (NICHT hochladen)
+datasets/
+*.csv
+
+# Trainierte Modelle (NICHT hochladen)
+SavePath/
+experiments/
+
+overfitting_test_results/
+overfitting_test_results1/
+
+# Große / generierte Dateien
+*.zip
+*.tar
+*.h5
+*.pth
+*.ckpt
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

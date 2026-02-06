@@ -38,9 +38,9 @@ parser.add_argument('--resume',default='',type=str)
 # the weight decay
 parser.add_argument('--weight-decay','--wd',default=0.0005,type=float)
 # the path to save the model parameters
-parser.add_argument('--save_dir',default='../SavePath/yolol2',type=str)
+parser.add_argument('--save_dir',default='./SavePath/yolol2',type=str)
 # the settings of gpus, multiGPU can use '0,1' or '0,1,2,3'
-parser.add_argument('--gpu', default='4', type=str)
+parser.add_argument('--gpu', default='0', type=str)
 # the early stop parameter
 parser.add_argument('--patient',default=20,type=int)
 # the loss HNM_heatmap for baseline heatmap regression, HNM_propmap for yolol
@@ -82,7 +82,8 @@ def main(args):
     save_dir = args.save_dir
     logging.info(args)
     if args.resume:
-        checkpoint = torch.load(args.resume)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #
+        checkpoint = torch.load(args.resume, map_location=device) #, map_location=device
         start_epoch = checkpoint['epoch'] + 1
         net.load_state_dict(checkpoint['state_dict'])
 
@@ -106,6 +107,7 @@ def main(args):
         args.batch_size = 1
         if args.test_flag == 0:
             test_transform = transforms.Compose([
+                tr.CenterCrop(), # added by alissa
                 tr.LandmarkProposal(shrink=args.shrink, anchors=args.anchors),
                 tr.Normalize(),
                 tr.ToTensor(),
@@ -128,6 +130,8 @@ def main(args):
                                  batch_size=args.batch_size,
                                  shuffle=False,
                                  num_workers=4)
+        
+        os.makedirs("./hz_yolo_all/", exist_ok=True) # added by alissa
         test(testloader, net, args)
         return
 
