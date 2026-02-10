@@ -16,10 +16,11 @@ from torch.utils.data import DataLoader
 #from data_utils.dataloader import Molar3D
 from data_utils.spine_dataloader import VertebraePOI
 import data_utils.transforms as tr
-from utils import setgpu, metric
+from utils import setgpu, metric, metric_proj
 from data_utils.transforms import LandMarkToGaussianHeatMap
 from models.losses import HNM_heatmap
 from models.BiFormer_Unet import BiFormer_Unet
+from models.UNet import UNet3D
 
 
 # super parameters settings here
@@ -39,7 +40,7 @@ parser.add_argument('--resume',default='',type=str)
 # the weight decay
 parser.add_argument('--weight-decay','--wd',default=0.0005,type=float)
 # the path to save the model parameters
-parser.add_argument('--save_dir',default='./SavePath/baseline_gruber',type=str)
+parser.add_argument('--save_dir',default='./SavePath/gruber-fixed_size',type=str)
 # the settings of gpus, multiGPU can use '0,1' or '0,1,2,3'
 parser.add_argument('--gpu', default='0', type=str)
 # the early stop parameter
@@ -60,6 +61,13 @@ parser.add_argument('-R','--focus_radius', default=20,type=int)
 # the test flag | -1 for train, 0 for eval, 1 for test |
 parser.add_argument('--test_flag',default=-1,type=int, choices=[-1, 0, 1])
 parser.add_argument('--master_df_path', default='./gruber_dataset_cutouts/cutouts/master_df.csv',type=str)
+
+parser.add_argument('--input_shape', default=[215, 215, 144], type=int, nargs=3,
+                    help='Input shape as three integers (H W D)')
+parser.add_argument('--project_gt', action='store_true', help='project GT to surface')
+
+parser.add_argument('--project_pred', action='store_true', help='project predictions to surface')
+
 
 
 
@@ -107,7 +115,6 @@ def main(args):
                 ])
             phase = 'val'
         else:
-            # print("test000000000")
             test_transform = transforms.Compose([
                 tr.CenterCrop(size=[128,128,64]), # center crop for validation
                 #tr.Normalize(),
@@ -121,16 +128,25 @@ def main(args):
         test_dataset = VertebraePOI(
             master_df=master_df,
             transform=test_transform,
-            phase=phase
+            phase=phase,
+            input_shape=args.input_shape,
+            project_gt=args.project_gt
         )
+
         testloader = DataLoader(test_dataset,
                                  batch_size=1,
                                  shuffle=False,
                                  num_workers=4)
         
-        os.makedirs("./hz_baseline_gruber_all/", exist_ok=True) # added by alissa
+        #os.makedirs("./hz_baseline_gruber_all/", exist_ok=True) # added by alissa
+        os.makedirs(os.path.join(args.save_dir, "hz_baseline_gruber_all"), exist_ok=True)
 
-        test(testloader, net)
+        #test(testloader, net)
+
+        if args.project_pred:
+            test_proj(testloader, net, args)
+        else:
+            test(testloader, net, args)
         return
         
 
@@ -153,10 +169,13 @@ def main(args):
     #                  phase='train',
     #                  parent_path=args.data_path)
 
+
     train_dataset = VertebraePOI(
         master_df=master_df,
         transform=train_transform,
         phase='train',
+        input_shape=args.input_shape,
+        project_gt=args.project_gt
     )
 
     trainloader = DataLoader(train_dataset,
@@ -355,6 +374,173 @@ def test(dataloader, net):
     logging.info(
         '***************************************************************************'
     )
+
+def test_proj(dataloader, net):
+    start_time = time.time()
+    net.eval()
+    total_mre = []
+    total_mean_mre = []
+    
+    total_mre_projected = []
+    total_mean_mre_projected = []
+    
+    N = 0
+    total_hits = np.zeros((8, 14))
+    total_hits_projected = np.zeros((8, 14))
+    
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+            data = sample['image']
+            landmarks = sample['landmarks']
+            surface = sample.get('surface', None)  # ← Optional surface
+            spacing = sample['spacing']
+            data = data.to(DEVICE)
+            
+            heatmap = net(data)
+            
+            # Call metric_proj instead of metric
+            if surface is not None:
+                mre, hits, mre_proj, hits_proj = metric_proj(
+                    heatmap.cpu().numpy(), 
+                    spacing.numpy(), 
+                    landmarks.cpu().numpy(),
+                    surface_masks=surface.numpy()
+                )
+                total_mre_projected.append(mre_proj)
+                total_hits_projected += hits_proj
+                
+                # Current projected MRE
+                cur_mre_proj = []
+                for cdx in range(len(mre_proj[0])):
+                    if mre_proj[0][cdx] > 0:
+                        cur_mre_proj.append(mre_proj[0][cdx])
+                total_mean_mre_projected.append(np.mean(cur_mre_proj))
+                print("#: No.", i, "--the current projected MRE is [%.4f]" % np.mean(cur_mre_proj))
+            else:
+                mre, hits = metric(
+                    heatmap.cpu().numpy(), 
+                    spacing.numpy(), 
+                    landmarks.cpu().numpy()
+                )
+            
+            total_hits += hits
+            total_mre.append(np.array(mre))
+            N += data.shape[0]
+            
+            # Current MRE
+            cur_mre = []
+            for cdx in range(len(mre[0])):
+                if mre[0][cdx] > 0:
+                    cur_mre.append(mre[0][cdx])
+            total_mean_mre.append(np.mean(cur_mre))
+            print("#: No.", i, "--the current MRE is [%.4f]" % np.mean(cur_mre))
+    
+    total_mre = np.concatenate(total_mre, 0)
+    
+    # Concatenate projected MRE
+    if len(total_mre_projected) > 0:
+        total_mre_projected = np.concatenate(total_mre_projected, 0)
+    
+    ################################ molar print ##############################################
+    names = [
+        '81', '82', '83', '84', '85', '86', '87', '88', '89',
+        '101', '102', '103', '104', '105', '106', '107', '108',
+        '109', '110', '111', '112', '113', '114', '115', '116',
+        '117', '118', '119', '120', '121', '122', '123', '124',
+        '125', '127'
+    ]
+
+    IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
+    form = {"metric": IDs}
+    mre = []
+    sd = []
+    
+    mre_proj = []
+    sd_proj = []
+    
+    cur_hits = total_hits[:4] / total_hits[4:]
+    
+    # Projected hits
+    if len(total_mre_projected) > 0:
+        cur_hits_projected = total_hits_projected[:4] / total_hits_projected[4:]
+
+    ############################## each class mre ##############################################
+    for i, name in enumerate(names):
+        # Projected MRE
+        if len(total_mre_projected) > 0:
+            cur_mre_proj = []
+            for j in range(total_mre_projected.shape[0]):
+                if total_mre_projected[j, i] > 0:
+                    cur_mre_proj.append(total_mre_projected[j, i])
+            cur_mre_proj = np.array(cur_mre_proj)
+            mre_proj.append(np.mean(cur_mre_proj))
+            sd_proj.append(np.sqrt(np.sum(pow(np.array(cur_mre_proj) - np.mean(cur_mre_proj), 2)) / (N-1)))
+        
+        # Original MRE
+        cur_mre = []
+        for j in range(total_mre.shape[0]):
+            if total_mre[j, i] > 0:
+                cur_mre.append(total_mre[j, i])
+        cur_mre = np.array(cur_mre)
+        mre.append(np.mean(cur_mre))
+        sd.append(np.sqrt(np.sum(pow(np.array(cur_mre) - np.mean(cur_mre), 2)) / (N-1)))
+
+    ########################### Original results ######################################################
+    mre = np.stack(mre, 0)
+    sd = np.stack(sd, 0)
+    total = np.stack([mre, sd], 0)
+    total = np.concatenate([total, cur_hits], 0)
+    
+    for i, name in enumerate(names):
+        form[name] = total[:, i]
+    
+    df = pd.DataFrame(form, columns=form.keys())
+    df.to_excel('baseline_gruber_test.xlsx', index=False, header=True)
+
+    # Projected results
+    if len(total_mre_projected) > 0:
+        mre_proj = np.stack(mre_proj, 0)
+        sd_proj = np.stack(sd_proj, 0)
+        total_proj = np.stack([mre_proj, sd_proj], 0)
+        total_proj = np.concatenate([total_proj, cur_hits_projected], 0)
+        
+        form_proj = {"metric": IDs}
+        for i, name in enumerate(names):
+            form_proj[name] = total_proj[:, i]
+        
+        df_proj = pd.DataFrame(form_proj, columns=form_proj.keys())
+        df_proj.to_excel('baseline_gruber_test_projected.xlsx', index=False, header=True)
+
+    ########################### total mre ######################################################
+    mmre = np.mean(total_mean_mre)
+    sd = np.sqrt(np.sum(pow(np.array(total_mean_mre) - mmre, 2)) / (N-1))
+    
+    total_hits_sum = np.sum(total_hits, 1)
+    logging.info(
+        'Test-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+            mmre, sd, 
+            total_hits_sum[0] / total_hits_sum[4],
+            total_hits_sum[1] / total_hits_sum[5],
+            total_hits_sum[2] / total_hits_sum[6],
+            total_hits_sum[3] / total_hits_sum[7],
+            time.time()-start_time))
+    logging.info('*' * 79)
+
+    # Projected summary
+    if len(total_mre_projected) > 0:
+        mmre_proj = np.mean(total_mean_mre_projected)
+        sd_proj = np.sqrt(np.sum(pow(np.array(total_mean_mre_projected) - mmre_proj, 2)) / (N-1))
+        
+        total_hits_projected_sum = np.sum(total_hits_projected, 1)
+        logging.info(
+            'Test projected-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+                mmre_proj, sd_proj, 
+                total_hits_projected_sum[0] / total_hits_projected_sum[4],
+                total_hits_projected_sum[1] / total_hits_projected_sum[5],
+                total_hits_projected_sum[2] / total_hits_projected_sum[6],
+                total_hits_projected_sum[3] / total_hits_projected_sum[7],
+                time.time()-start_time))
+        logging.info('*' * 79)
     
 if __name__ == '__main__':
 

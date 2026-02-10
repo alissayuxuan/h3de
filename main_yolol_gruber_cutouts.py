@@ -17,9 +17,10 @@ from torch.utils.data import DataLoader
 #from data_utils.dataloader import Molar3D
 from data_utils.spine_dataloader import VertebraePOI
 import data_utils.transforms as tr
-from utils import setgpu, metric_proposal
+from utils import setgpu, metric_proposal, metric_proposal_proj
 from models.losses import HNM_propmap
 from models.PBiFormer_Unet import PBiFormer_Unet
+from models.UNet import PResidualUNet3D
 
 
 # super parameters settings here
@@ -68,10 +69,12 @@ parser.add_argument('--test_flag',default=-1,type=int, choices=[-1, 0, 1])
 # the data type | full for dataset with complete landmarks | mini for mini dataset with uncomplete landmarks | all for default dataset
 parser.add_argument('--data_type', default='all',type=str)
 parser.add_argument('--master_df_path', default='./gruber_dataset_cutouts/cutouts/master_df.csv',type=str)
-parser.add_argument('--input_shape', default=[215, 215, 128], type=int, nargs=3,
+parser.add_argument('--input_shape', default=[215, 215, 144], type=int, nargs=3,
                     help='Input shape as three integers (H W D)')
 
 parser.add_argument('--project_gt', action='store_true', help='project GT to surface')
+
+parser.add_argument('--project_pred', action='store_true', help='project predictions to surface')
 
 DEVICE = torch.device("cuda" if True else "cpu")
 
@@ -148,8 +151,12 @@ def main(args):
                                  batch_size=args.batch_size,
                                  shuffle=False,
                                  num_workers=4)
-        os.makedirs("./hz_yolol_gruber_all/", exist_ok=True) # added by alissa
-        test(testloader, net, args)
+        os.makedirs(os.path.join(args.save_dir, "hz_yolol_gruber_all"), exist_ok=True) # added by alissa
+
+        if args.project_pred:
+            test_proj_pred(testloader, net, args)
+        else:
+            test(testloader, net, args)
         return
 
 
@@ -313,7 +320,7 @@ def test(dataloader, net, args):
             data = data.to(DEVICE)
             proposal_map = net(data)
             mre, hits = metric_proposal(proposal_map, spacing.numpy(),
-                     landmarks.numpy(), "./hz_gruber_all/"+filename[0], shrink=args.shrink, anchors=args.anchors, 
+                     landmarks.numpy(), os.path.join(args.save_dir, "hz_yolol_gruber_all",filename[0]), shrink=args.shrink, anchors=args.anchors, 
                      n_class=args.n_class)            
             total_hits += hits
             total_mre.append(np.array(mre))
@@ -378,6 +385,339 @@ def test(dataloader, net, args):
     logging.info(
         '***************************************************************************'
     )
+
+def test_proj_pred(dataloader, net, args):
+    start_time = time.time()
+    net.eval()
+    total_mre = []
+    total_mean_mre = []
+
+    total_mre_projected = []
+    total_mean_mre_projected = []
+
+    N = 0
+    total_hits = np.zeros((8, args.n_class))
+    total_hits_projected = np.zeros((8, args.n_class))  # ← FIX: (8, n_class) nicht (n_class,)
+
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+            data = sample['image']
+            landmarks = sample['landmarks']
+            surface = sample.get('surface', None)  # ← FIX: .get() falls surface nicht existiert
+            spacing = sample['spacing']
+            filename = sample['filename']
+            data = data.to(DEVICE)
+            proposal_map = net(data)
+
+            if surface is not None:
+                mre, hits, mre_proj, hits_proj = metric_proposal_proj(
+                    proposal_map, 
+                    spacing.numpy(),
+                    landmarks.numpy(), 
+                    os.path.join(args.save_dir, "hz_yolol_gruber_all", filename[0]), 
+                    shrink=args.shrink, 
+                    anchors=args.anchors, 
+                    n_class=args.n_class,
+                    surface_masks=surface.numpy()
+                )
+                total_mre_projected.append(mre_proj)
+                total_hits_projected += hits_proj
+
+                cur_mre_proj = []
+                for cdx in range(len(mre_proj[0])):
+                    if mre_proj[0][cdx] > 0:
+                        cur_mre_proj.append(mre_proj[0][cdx])
+                total_mean_mre_projected.append(np.mean(cur_mre_proj))
+                print("#: No.", i, "--the current projected MRE is [%.4f]" % np.mean(cur_mre_proj))
+            else:
+                mre, hits = metric_proposal(
+                    proposal_map, 
+                    spacing.numpy(),
+                    landmarks.numpy(), 
+                    os.path.join(args.save_dir, "hz_yolol_gruber_all", filename[0]), 
+                    shrink=args.shrink, 
+                    anchors=args.anchors, 
+                    n_class=args.n_class
+                )            
+            
+            total_hits += hits
+            total_mre.append(np.array(mre))
+            N += data.shape[0]
+            cur_mre = []
+            for cdx in range(len(mre[0])):
+                if mre[0][cdx] > 0:
+                    cur_mre.append(mre[0][cdx])
+            total_mean_mre.append(np.mean(cur_mre))
+            print("#: No.", i, "--the current MRE is [%.4f]" % np.mean(cur_mre))
+    
+    total_mre = np.concatenate(total_mre, 0)
+    
+    # ← FIX: Concatenate projected MRE auch!
+    if len(total_mre_projected) > 0:
+        total_mre_projected = np.concatenate(total_mre_projected, 0)
+    
+    ################################# molar print ##############################################
+    names = [
+        '81', '82', '83', '84', '85', '86', '87', '88', '89',
+        '101', '102', '103', '104', '105', '106', '107', '108',
+        '109', '110', '111', '112', '113', '114', '115', '116',
+        '117', '118', '119', '120', '121', '122', '123', '124',
+        '125', '127'
+    ]
+    IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
+    form = {"metric": IDs}
+    mre = []
+    sd = []
+
+    mre_proj = []
+    sd_proj = []
+
+    cur_hits = total_hits[:4] / total_hits[4:]
+    
+    # ← FIX: Divide by [4:] not [:4]
+    if len(total_mre_projected) > 0:
+        cur_hits_projected = total_hits_projected[:4] / total_hits_projected[4:]
+
+    ############################## each class mre ##############################################
+    for i, name in enumerate(names):
+        # Projected MRE
+        if len(total_mre_projected) > 0:
+            cur_mre_proj = []
+            for j in range(total_mre_projected.shape[0]):
+                if total_mre_projected[j, i] > 0:
+                    cur_mre_proj.append(total_mre_projected[j, i])
+            cur_mre_proj = np.array(cur_mre_proj)
+            mre_proj.append(np.mean(cur_mre_proj))
+            sd_proj.append(np.sqrt(np.sum(pow(np.array(cur_mre_proj) - np.mean(cur_mre_proj), 2)) / (N-1)))
+
+        # Original MRE
+        cur_mre = []
+        for j in range(total_mre.shape[0]):
+            if total_mre[j, i] > 0:
+                cur_mre.append(total_mre[j, i])
+        cur_mre = np.array(cur_mre)
+        mre.append(np.mean(cur_mre))
+        sd.append(np.sqrt(np.sum(pow(np.array(cur_mre) - np.mean(cur_mre), 2)) / (N-1)))
+    
+    # Original results
+    mre = np.stack(mre, 0)
+    sd = np.stack(sd, 0)
+    total = np.stack([mre, sd], 0)
+    total = np.concatenate([total, cur_hits], 0)
+    
+    for i, name in enumerate(names):
+        form[name] = total[:, i]
+    
+    df = pd.DataFrame(form, columns=form.keys())
+    df.to_excel('yolol__gruber_test.xlsx', index=False, header=True)
+
+    # Projected results
+    if len(total_mre_projected) > 0:
+        mre_proj = np.stack(mre_proj, 0)
+        sd_proj = np.stack(sd_proj, 0)
+        total_proj = np.stack([mre_proj, sd_proj], 0)
+        total_proj = np.concatenate([total_proj, cur_hits_projected], 0)
+        
+        form_proj = {"metric": IDs}  # ← FIX: Neue form für projected
+        for i, name in enumerate(names):
+            form_proj[name] = total_proj[:, i]
+        
+        df_proj = pd.DataFrame(form_proj, columns=form_proj.keys())
+        df_proj.to_excel('yolol__gruber_test_projected.xlsx', index=False, header=True)
+
+    ########################### total mre ######################################################
+    mmre = np.mean(total_mean_mre)
+    sd = np.sqrt(np.sum(pow(np.array(total_mean_mre) - mmre, 2)) / (N-1))
+    
+    total_hits_sum = np.sum(total_hits, 1)
+    logging.info(
+        'Test-- MRE: [%.2f] ± SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+            mmre, sd, 
+            total_hits_sum[0] / total_hits_sum[4],
+            total_hits_sum[1] / total_hits_sum[5],
+            total_hits_sum[2] / total_hits_sum[6],
+            total_hits_sum[3] / total_hits_sum[7],
+            time.time()-start_time))
+    logging.info('*' * 79)
+
+    # Projected summary
+    if len(total_mre_projected) > 0:
+        mmre_proj = np.mean(total_mean_mre_projected)
+        sd_proj = np.sqrt(np.sum(pow(np.array(total_mean_mre_projected) - mmre_proj, 2)) / (N-1))
+        
+        total_hits_projected_sum = np.sum(total_hits_projected, 1)  # ← FIX: Sum over landmarks
+        logging.info(
+            'Test projected-- MRE: [%.2f] ± SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+                mmre_proj, sd_proj, 
+                total_hits_projected_sum[0] / total_hits_projected_sum[4],  # ← FIX
+                total_hits_projected_sum[1] / total_hits_projected_sum[5],  # ← FIX
+                total_hits_projected_sum[2] / total_hits_projected_sum[6],  # ← FIX
+                total_hits_projected_sum[3] / total_hits_projected_sum[7],  # ← FIX
+                time.time()-start_time))
+        logging.info('*' * 79)
+
+"""
+def test_proj_pred(dataloader, net, args):
+    start_time = time.time()
+    net.eval()
+    total_mre = []
+    total_mean_mre = []
+
+    total_mre_projected = []
+    total_mean_mre_projected = []
+
+    N = 0
+    total_hits = np.zeros((8, args.n_class))
+
+    total_hits_projected = np.zeros(args.n_class)
+
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+            data = sample['image']
+            landmarks = sample['landmarks']
+            surface = sample['surface'] # NEW (TODO: add in getitem())
+            spacing = sample['spacing']
+            filename = sample['filename']
+            data = data.to(DEVICE)
+            proposal_map = net(data)
+
+            if surface is not None:
+                mre, hits, mre_proj, hits_proj = metric_proposal(
+                    proposal_map, 
+                    spacing.numpy(),
+                    landmarks.numpy(), 
+                    "./hz_gruber_all/"+filename[0], 
+                    shrink=args.shrink, 
+                    anchors=args.anchors, 
+                    n_class=args.n_class,
+                    surface_masks=surface.numpy()  # ← Pass surface
+                )
+                total_mre_projected.append(mre_proj)
+                total_hits_projected += hits_proj
+
+                cur_mre_proj = []
+                for cdx in range(len(mre_proj[0])):
+                    if mre_proj[0][cdx]>0:
+                        cur_mre_proj.append(mre_proj[0][cdx])
+                total_mean_mre_projected.append(np.mean(cur_mre_proj))
+                print("#: No.", i, "--the current projected MRE is [%.4f] "%np.mean(cur_mre_proj))
+
+
+
+            else:
+                mre, hits = metric_proposal(proposal_map, spacing.numpy(),
+                     landmarks.numpy(), "./hz_gruber_all/"+filename[0], shrink=args.shrink, anchors=args.anchors, 
+                     n_class=args.n_class)            
+            total_hits += hits
+            total_mre.append(np.array(mre))
+            N += data.shape[0]
+            cur_mre = []
+            for cdx in range(len(mre[0])):
+                if mre[0][cdx]>0:
+                    cur_mre.append(mre[0][cdx])
+            total_mean_mre.append(np.mean(cur_mre))
+            print("#: No.", i, "--the current MRE is [%.4f] "%np.mean(cur_mre))
+    total_mre = np.concatenate(total_mre, 0)
+
+    
+    ################################# molar print ##############################################
+    names = [
+        '81', '82', '83', '84', '85', '86', '87', '88', '89',
+        '101', '102', '103', '104', '105', '106', '107', '108',
+        '109', '110', '111', '112', '113', '114', '115', '116',
+        '117', '118', '119', '120', '121', '122', '123', '124',
+        '125', '127'
+        ]
+    IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
+    form = {"metric": IDs}
+    mre = []
+    sd = []
+
+    mre_proj = []
+    sd_proj = []
+
+    cur_hits = total_hits[:4] / total_hits[4:]
+
+    cur_hits_projected = total_hits_projected[:4] / total_hits_projected[:4]
+
+    ############################## each class mre ##############################################
+    for i, name in enumerate(names):
+
+        if surface is not None:
+
+            cur_mre_proj = []
+            for j in range(total_mre_projected.shape[0]):
+                if total_mre_projected[j,i] > 0:
+                    cur_mre_proj.append(total_mre_projected[j,i])
+            cur_mre_proj = np.array(cur_mre_proj)
+            mre_proj.append(np.mean(cur_mre_proj))
+            sd_proj.append(np.sqrt(np.sum(pow(np.array(cur_mre_proj) - np.mean(cur_mre_proj), 2)) / (N-1)))
+
+        cur_mre = []
+        for j in range(total_mre.shape[0]):
+            if total_mre[j,i] > 0:
+                cur_mre.append(total_mre[j,i])
+        cur_mre = np.array(cur_mre)
+        mre.append(np.mean(cur_mre))
+        sd.append(np.sqrt(np.sum(pow(np.array(cur_mre) - np.mean(cur_mre), 2)) / (N-1)))
+    
+    mre = np.stack(mre, 0)
+    sd = np.stack(sd, 0)
+    total = np.stack([mre, sd], 0)
+
+    if surface is not None:
+        mre_proj = np.stack(mre_proj, 0)
+        sd_proj = np.stack(sd_proj, 0)
+        total_proj = np.stack([mre_proj, sd_proj], 0)
+
+        total_proj = np.concatenate([total_proj, cur_hits_projected], 0)
+        for i, name in enumerate(names):
+            form[name+"_proj"] = total_proj[:, i]
+        
+        df_proj = pd.DataFrame(form, columns = form.keys())
+        df_proj.to_excel( 'yolol__gruber_test_projected.xlsx', index = False, header=True)
+    
+    total = np.concatenate([total, cur_hits], 0)
+    for i, name in enumerate(names):
+        form[name] = total[:, i]
+    df = pd.DataFrame(form, columns = form.keys())
+    # write each landmark MRE to xlsx file
+    df.to_excel( 'yolol__gruber_test.xlsx', index = False, header=True)
+
+    ########################### total mre ######################################################
+    mmre = np.mean(total_mean_mre)
+    sd = np.sqrt(np.sum(pow(np.array(total_mean_mre) - mmre, 2)) / (N-1))
+    
+    total_hits = np.sum(total_hits, 1)
+    logging.info(
+        'Test-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' %(
+            mmre, sd, 
+            total_hits[0] / total_hits[4],
+            total_hits[1] / total_hits[5],
+            total_hits[2] / total_hits[6],
+            total_hits[3] / total_hits[7],
+            time.time()-start_time))
+    logging.info(
+        '***************************************************************************'
+    )
+
+    if surface is not None:
+        mmre_proj = np.mean(total_mean_mre_projected)
+        sd_proj = np.sqrt(np.sum(pow(np.array(total_mean_mre_projected) - mmre_proj, 2)) / (N-1))
+        
+        total_hits_projected = np.sum(total_hits_projected, 0)
+        logging.info(
+            'Test projected-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' %(
+                mmre_proj, sd_proj, 
+                total_hits_projected[0] / total_hits_projected[0],
+                total_hits_projected[1] / total_hits_projected[1],
+                total_hits_projected[2] / total_hits_projected[2],
+                total_hits_projected[3] / total_hits_projected[3],
+                time.time()-start_time))
+        logging.info(
+            '***************************************************************************'
+        )
+    """
 
 if __name__ == '__main__':
     """

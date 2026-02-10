@@ -29,6 +29,7 @@ import data_utils.transforms as tr
 from utils import setgpu
 from models.losses import HNM_propmap
 from models.PBiFormer_Unet import PBiFormer_Unet
+from models.UNet import PResidualUNet3D
 
 
 # ============================================================================
@@ -62,8 +63,8 @@ parser.add_argument('--crop_size', default=[128, 128, 64], type=int, nargs=3)
 # Training args
 parser.add_argument('--weight_decay', default=0.0, type=float,
                     help='Weight decay (0 for overfitting)')
-parser.add_argument('--gpu', default='0', type=str)
-parser.add_argument('--save_dir', default='./overfitting_test_results', type=str)
+parser.add_argument('--gpu', default='1', type=str)
+parser.add_argument('--save_dir', default='./overfit_test/overfit_test_presunet', type=str)
 
 # Debugging args
 parser.add_argument('--disable_crop', action='store_true',
@@ -220,7 +221,7 @@ def main(args):
     
     # ===== MODEL =====
     logging.info("\n=== MODEL SETUP ===")
-    net = PBiFormer_Unet(n_class=args.n_class, n_anchor=len(args.anchors))
+    net =  globals()[args.model_name](n_class=args.n_class, n_anchor=len(args.anchors))#PBiFormer_Unet(n_class=args.n_class, n_anchor=len(args.anchors))
     net = net.to(DEVICE)
     
     n_params = sum(p.numel() for p in net.parameters())

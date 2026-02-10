@@ -389,17 +389,19 @@ class VertebraePOI(Dataset):
                 list_idx = self.poi_idx_to_list_idx[missing_poi_id.item()]
                 poi_array[list_idx] = -1000.0
 
-
+        transformed_mask = input_data > 0
+        surface = compute_surface(transformed_mask, iterations=self.surface_erosion_iterations)
+            
         if self.project_gt:
             # Compute surface from mask
-            transformed_mask = input_data > 0
-            surface = compute_surface(transformed_mask, iterations=self.surface_erosion_iterations)
             
             # Project POIs to surface
             poi_array, projection_distances = surface_project_coords(
                 poi_array, 
                 surface
             )
+       
+
 
         
         _spacing = np.array(self.spacing[index])
@@ -409,13 +411,26 @@ class VertebraePOI(Dataset):
         _img = input_data.squeeze(0).numpy()  # Remove channel dim
         _landmark = poi_array.numpy()
 
+
+        # ← NEU: Stelle sicher dass surface 3D ist
+        print(f"Original surface shape: {surface.shape}")
+        if surface.ndim == 4:
+            surface = surface.squeeze(0)  # (1, H, W, D) → (H, W, D)
+
+            print(f"Surface squeezed to shape: {surface.shape}")
+        elif surface.ndim == 2:
+            raise ValueError(f"Surface is 2D but should be 3D: {surface.shape}")
+        _surface = surface.numpy()
         #print(f"Sample image shape: {_img.shape}")
+
+        
         
         sample = {
             'image': _img,
             'landmarks': _landmark,
             'spacing': _spacing,
-            'filename': _filename
+            'filename': _filename,
+            'surface': _surface
         }
         
         if self.transform is not None:

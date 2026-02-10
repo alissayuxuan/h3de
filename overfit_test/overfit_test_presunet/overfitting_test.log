@@ -1,0 +1,129 @@
+2026-02-07 09:48:40 [INFO] ================================================================================
+2026-02-07 09:48:40 [INFO] OVERFITTING TEST
+2026-02-07 09:48:40 [INFO] ================================================================================
+2026-02-07 09:48:40 [INFO] Configuration:
+2026-02-07 09:48:40 [INFO]   n_samples: 1
+2026-02-07 09:48:40 [INFO]   epochs: 500
+2026-02-07 09:48:40 [INFO]   lr: 0.01
+2026-02-07 09:48:40 [INFO]   batch_size: 1
+2026-02-07 09:48:40 [INFO]   model_name: PResidualUNet3D
+2026-02-07 09:48:40 [INFO]   n_class: 35
+2026-02-07 09:48:40 [INFO]   shrink: 4
+2026-02-07 09:48:40 [INFO]   anchors: [0.5, 0.75, 1.0, 1.25]
+2026-02-07 09:48:40 [INFO]   master_df_path: datasets/gruber-cutouts-fixed_size/master_df-excel_outliers_proj_6_exclude-split.csv
+2026-02-07 09:48:40 [INFO]   input_shape: [215, 215, 144]
+2026-02-07 09:48:40 [INFO]   crop_size: [128, 128, 64]
+2026-02-07 09:48:40 [INFO]   weight_decay: 0.0
+2026-02-07 09:48:40 [INFO]   gpu: 1
+2026-02-07 09:48:40 [INFO]   save_dir: ./overfit_test/overfit_test_presunet
+2026-02-07 09:48:40 [INFO]   disable_crop: False
+2026-02-07 09:48:40 [INFO]   project_gt: False
+2026-02-07 09:48:40 [INFO] ================================================================================
+2026-02-07 09:48:40 [INFO] 
+=== MODEL SETUP ===
+2026-02-07 09:48:41 [INFO] Model: PResidualUNet3D
+2026-02-07 09:48:41 [INFO] Parameters: 34,695,864
+2026-02-07 09:48:41 [INFO] Device: cuda
+2026-02-07 09:48:41 [INFO] Optimizer: Adam (lr=0.01, weight_decay=0.0)
+2026-02-07 09:48:41 [INFO] 
+=== DATA SETUP ===
+2026-02-07 09:48:41 [INFO] Loaded master_df: 858 samples
+2026-02-07 09:48:47 [INFO] Full dataset size: 494
+2026-02-07 09:48:47 [INFO] Using 1 sample(s) for overfitting test
+2026-02-07 09:48:48 [INFO] 
+Sample inspection:
+2026-02-07 09:48:48 [INFO]   Filename: WS-63_vert6_label.npy
+2026-02-07 09:48:48 [INFO]   Image shape: (1, 128, 128, 64)
+2026-02-07 09:48:48 [INFO]   Image range: [0.000, 1.000]
+2026-02-07 09:48:48 [INFO]   Proposals shape: (4, 400, 7)
+2026-02-07 09:48:48 [INFO]   Spacing: [1. 1. 1.]
+2026-02-07 09:48:48 [INFO] Invalid POIs: 0/35
+2026-02-07 09:48:48 [INFO] 
+=== INITIAL FORWARD PASS ===
+2026-02-07 09:48:53 [INFO] Input shape: torch.Size([1, 1, 128, 128, 64])
+2026-02-07 09:48:53 [INFO] Output shape: torch.Size([1, 32, 32, 16, 4, 38])
+2026-02-07 09:48:53 [INFO] Initial loss: 2.110834
+2026-02-07 09:48:53 [INFO] 
+=== TRAINING ===
+2026-02-07 09:48:53 [INFO] Training for 500 epochs...
+2026-02-07 09:49:11 [INFO] Epoch   1/500: Loss = 2.221207, Grad = 23.673168
+2026-02-07 09:50:05 [INFO] Epoch  10/500: Loss = 0.596338, Grad = 0.567915
+2026-02-07 09:51:12 [INFO] Epoch  20/500: Loss = 0.420666, Grad = 1.254241
+2026-02-07 09:52:18 [INFO] Epoch  30/500: Loss = 0.366619, Grad = 1.013304
+2026-02-07 09:53:15 [INFO] Epoch  40/500: Loss = 0.348237, Grad = 1.146622
+2026-02-07 09:54:22 [INFO] Epoch  50/500: Loss = 0.294952, Grad = 0.600295
+2026-02-07 09:55:28 [INFO] Epoch  60/500: Loss = 0.259425, Grad = 1.099587
+2026-02-07 09:56:34 [INFO] Epoch  70/500: Loss = 0.226120, Grad = 0.614056
+2026-02-07 09:57:40 [INFO] Epoch  80/500: Loss = 0.218975, Grad = 0.624737
+2026-02-07 09:58:46 [INFO] Epoch  90/500: Loss = 0.219971, Grad = 0.386472
+2026-02-07 09:59:53 [INFO] Epoch 100/500: Loss = 0.209513, Grad = 0.527147
+2026-02-07 10:00:59 [INFO] Epoch 110/500: Loss = 0.201135, Grad = 0.578679
+2026-02-07 10:02:05 [INFO] Epoch 120/500: Loss = 0.194528, Grad = 0.534248
+2026-02-07 10:02:38 [INFO] Epoch 130/500: Loss = 0.194545, Grad = 0.398599
+2026-02-07 10:02:59 [INFO] Epoch 140/500: Loss = 0.189482, Grad = 0.438320
+2026-02-07 10:03:38 [INFO] Epoch 150/500: Loss = 0.179799, Grad = 0.335174
+2026-02-07 10:04:44 [INFO] Epoch 160/500: Loss = 0.181086, Grad = 0.375934
+2026-02-07 10:05:50 [INFO] Epoch 170/500: Loss = 0.187737, Grad = 0.315446
+2026-02-07 10:06:56 [INFO] Epoch 180/500: Loss = 0.186081, Grad = 0.447677
+2026-02-07 10:08:02 [INFO] Epoch 190/500: Loss = 0.201488, Grad = 0.451321
+2026-02-07 10:09:09 [INFO] Epoch 200/500: Loss = 0.180360, Grad = 0.425800
+2026-02-07 10:10:15 [INFO] Epoch 210/500: Loss = 0.161310, Grad = 0.249415
+2026-02-07 10:11:22 [INFO] Epoch 220/500: Loss = 0.179427, Grad = 0.332772
+2026-02-07 10:12:28 [INFO] Epoch 230/500: Loss = 0.167901, Grad = 0.381293
+2026-02-07 10:13:35 [INFO] Epoch 240/500: Loss = 0.152190, Grad = 0.196505
+2026-02-07 10:14:41 [INFO] Epoch 250/500: Loss = 0.149489, Grad = 0.240419
+2026-02-07 10:15:47 [INFO] Epoch 260/500: Loss = 0.147139, Grad = 0.256285
+2026-02-07 10:16:53 [INFO] Epoch 270/500: Loss = 0.154713, Grad = 0.226069
+2026-02-07 10:17:59 [INFO] Epoch 280/500: Loss = 0.142850, Grad = 0.247855
+2026-02-07 10:19:06 [INFO] Epoch 290/500: Loss = 0.126728, Grad = 0.228610
+2026-02-07 10:20:13 [INFO] Epoch 300/500: Loss = 0.147495, Grad = 0.280728
+2026-02-07 10:21:20 [INFO] Epoch 310/500: Loss = 0.139620, Grad = 0.222583
+2026-02-07 10:22:26 [INFO] Epoch 320/500: Loss = 0.141341, Grad = 0.211787
+2026-02-07 10:23:33 [INFO] Epoch 330/500: Loss = 0.128621, Grad = 0.246242
+2026-02-07 10:24:40 [INFO] Epoch 340/500: Loss = 0.137915, Grad = 0.271826
+2026-02-07 10:25:45 [INFO] Epoch 350/500: Loss = 0.144495, Grad = 0.212620
+2026-02-07 10:26:42 [INFO] Epoch 360/500: Loss = 0.126278, Grad = 0.156432
+2026-02-07 10:27:49 [INFO] Epoch 370/500: Loss = 0.115475, Grad = 0.182570
+2026-02-07 10:28:55 [INFO] Epoch 380/500: Loss = 0.138015, Grad = 0.177927
+2026-02-07 10:30:02 [INFO] Epoch 390/500: Loss = 0.135375, Grad = 0.246748
+2026-02-07 10:30:44 [INFO] Epoch 400/500: Loss = 0.127297, Grad = 0.233790
+2026-02-07 10:31:04 [INFO] Epoch 410/500: Loss = 0.128874, Grad = 0.180298
+2026-02-07 10:31:43 [INFO] Epoch 420/500: Loss = 0.124229, Grad = 0.140082
+2026-02-07 10:32:50 [INFO] Epoch 430/500: Loss = 0.117174, Grad = 0.175321
+2026-02-07 10:33:46 [INFO] Epoch 440/500: Loss = 0.127737, Grad = 0.152736
+2026-02-07 10:34:53 [INFO] Epoch 450/500: Loss = 0.113123, Grad = 0.123913
+2026-02-07 10:35:58 [INFO] Epoch 460/500: Loss = 0.151930, Grad = 0.239122
+2026-02-07 10:37:05 [INFO] Epoch 470/500: Loss = 0.131693, Grad = 0.175516
+2026-02-07 10:38:12 [INFO] Epoch 480/500: Loss = 0.103333, Grad = 0.148345
+2026-02-07 10:39:18 [INFO] Epoch 490/500: Loss = 0.122919, Grad = 0.223561
+2026-02-07 10:40:25 [INFO] Epoch 500/500: Loss = 0.115966, Grad = 0.171817
+2026-02-07 10:40:25 [INFO] 
+================================================================================
+2026-02-07 10:40:25 [INFO] RESULTS
+2026-02-07 10:40:25 [INFO] ================================================================================
+2026-02-07 10:40:25 [INFO] Initial loss:    2.221207
+2026-02-07 10:40:25 [INFO] Final loss:      0.115966
+2026-02-07 10:40:25 [INFO] Loss reduction:  94.8%
+2026-02-07 10:40:25 [INFO] Std (last 10):   0.013486
+2026-02-07 10:40:25 [INFO] 
+Gradient norms:
+2026-02-07 10:40:25 [INFO]   Mean:    0.442580
+2026-02-07 10:40:25 [INFO]   Final:   0.171817
+2026-02-07 10:40:25 [INFO] 
+✅ SUCCESS: Loss decreased by ≥90% - model can overfit!
+2026-02-07 10:40:25 [INFO] 
+=== VISUALIZATION ===
+2026-02-07 10:40:26 [INFO] Plot saved to: ./overfit_test/overfit_test_presunet/overfitting_results.png
+2026-02-07 10:40:26 [INFO] Results saved to: ./overfit_test/overfit_test_presunet/results.pth
+2026-02-07 10:40:26 [INFO] 
+================================================================================
+2026-02-07 10:40:26 [INFO] SUMMARY
+2026-02-07 10:40:26 [INFO] ================================================================================
+2026-02-07 10:40:26 [INFO] Dataset:         494 total (1 used)
+2026-02-07 10:40:26 [INFO] Epochs trained:  500
+2026-02-07 10:40:26 [INFO] Final loss:      0.115966
+2026-02-07 10:40:26 [INFO] Loss reduction:  94.8%
+2026-02-07 10:40:26 [INFO] Test result:     ✅ PASSED
+2026-02-07 10:40:26 [INFO] Plot:            ./overfit_test/overfit_test_presunet/overfitting_results.png
+2026-02-07 10:40:26 [INFO] Results:         ./overfit_test/overfit_test_presunet/results.pth
+2026-02-07 10:40:26 [INFO] ================================================================================

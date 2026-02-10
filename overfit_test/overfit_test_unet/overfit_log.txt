@@ -1,0 +1,131 @@
+2026-02-07 08:46:13: ================================================================================
+2026-02-07 08:46:13: UNet3D Overfitting Test Started
+2026-02-07 08:46:13: ================================================================================
+2026-02-07 08:46:13: Configuration: Namespace(model_name='UNet3D', epochs=100, batch_size=2, lr=0.001, weight_decay=0.0005, save_dir='./overfit_test/overfit_test_unet', gpu='1', loss_name='HNM_heatmap', data_path='./gruber_dataset_cutouts', n_class=35, focus_radius=20, master_df_path='./datasets/gruber-cutouts-fixed_size/master_df-excel_outliers_proj_6_exclude-split.csv', n_samples=5)
+2026-02-07 08:46:13: Log file: ./overfit_test/overfit_test_unet/overfit_log.txt
+2026-02-07 08:46:13: Device: cuda
+2026-02-07 08:46:13: 
+1. Initializing UNet3D model...
+2026-02-07 08:46:13:    Total parameters: 4,082,003
+2026-02-07 08:46:13:    Trainable parameters: 4,082,003
+2026-02-07 08:46:13: 
+2. Loading 5 training samples for overfitting test...
+2026-02-07 08:46:20:    Using 5 samples from full dataset (494 total)
+2026-02-07 08:46:20:    Batches per epoch: 3
+2026-02-07 08:46:20: 
+3. Starting overfitting test for 100 epochs...
+2026-02-07 08:46:20: ================================================================================
+2026-02-07 08:47:46: Epoch [  1/100] | Train Loss: 1.046820 | Eval Loss: 0.570324 | Time: 86.6s
+2026-02-07 08:48:00: Epoch [  2/100] | Train Loss: 0.546581 | Eval Loss: 0.507269 | Time: 13.8s
+2026-02-07 08:48:12: Epoch [  3/100] | Train Loss: 0.497908 | Eval Loss: 0.475599 | Time: 11.9s
+2026-02-07 08:48:26: Epoch [  4/100] | Train Loss: 0.469272 | Eval Loss: 0.462806 | Time: 13.7s
+2026-02-07 08:48:40: Epoch [  5/100] | Train Loss: 0.453295 | Eval Loss: 0.444460 | Time: 13.8s
+2026-02-07 08:48:55: Epoch [  6/100] | Train Loss: 0.444249 | Eval Loss: 0.430237 | Time: 14.0s
+2026-02-07 08:49:08: Epoch [  7/100] | Train Loss: 0.423610 | Eval Loss: 0.415631 | Time: 12.9s
+2026-02-07 08:49:17: Epoch [  8/100] | Train Loss: 0.409125 | Eval Loss: 0.398170 | Time: 8.6s
+2026-02-07 08:49:25: Epoch [  9/100] | Train Loss: 0.394439 | Eval Loss: 0.387322 | Time: 7.6s
+2026-02-07 08:49:32: Epoch [ 10/100] | Train Loss: 0.391803 | Eval Loss: 0.382189 | Time: 7.6s
+2026-02-07 08:49:44: Epoch [ 11/100] | Train Loss: 0.378829 | Eval Loss: 0.360691 | Time: 11.7s
+2026-02-07 08:49:57: Epoch [ 12/100] | Train Loss: 0.363777 | Eval Loss: 0.364128 | Time: 12.0s
+2026-02-07 08:50:11: Epoch [ 13/100] | Train Loss: 0.351228 | Eval Loss: 0.360575 | Time: 13.9s
+2026-02-07 08:50:25: Epoch [ 14/100] | Train Loss: 0.354588 | Eval Loss: 0.341074 | Time: 14.0s
+2026-02-07 08:50:39: Epoch [ 15/100] | Train Loss: 0.351634 | Eval Loss: 0.341479 | Time: 13.9s
+2026-02-07 08:50:49: Epoch [ 16/100] | Train Loss: 0.339669 | Eval Loss: 0.324475 | Time: 9.6s
+2026-02-07 08:51:01: Epoch [ 17/100] | Train Loss: 0.319656 | Eval Loss: 0.325428 | Time: 11.9s
+2026-02-07 08:51:15: Epoch [ 18/100] | Train Loss: 0.321997 | Eval Loss: 0.315884 | Time: 13.9s
+2026-02-07 08:51:29: Epoch [ 19/100] | Train Loss: 0.308047 | Eval Loss: 0.312697 | Time: 14.0s
+2026-02-07 08:51:43: Epoch [ 20/100] | Train Loss: 0.297096 | Eval Loss: 0.310534 | Time: 13.8s
+2026-02-07 08:51:53: Epoch [ 21/100] | Train Loss: 0.303912 | Eval Loss: 0.310175 | Time: 9.7s
+2026-02-07 08:52:08: Epoch [ 22/100] | Train Loss: 0.294998 | Eval Loss: 0.298587 | Time: 13.8s
+2026-02-07 08:52:20: Epoch [ 23/100] | Train Loss: 0.276432 | Eval Loss: 0.289925 | Time: 11.8s
+2026-02-07 08:52:34: Epoch [ 24/100] | Train Loss: 0.287255 | Eval Loss: 0.275360 | Time: 13.9s
+2026-02-07 08:52:48: Epoch [ 25/100] | Train Loss: 0.285386 | Eval Loss: 0.288458 | Time: 14.0s
+2026-02-07 08:52:58: Epoch [ 26/100] | Train Loss: 0.281463 | Eval Loss: 0.265167 | Time: 9.6s
+2026-02-07 08:53:12: Epoch [ 27/100] | Train Loss: 0.277730 | Eval Loss: 0.261657 | Time: 13.7s
+2026-02-07 08:53:24: Epoch [ 28/100] | Train Loss: 0.268647 | Eval Loss: 0.266068 | Time: 11.9s
+2026-02-07 08:53:38: Epoch [ 29/100] | Train Loss: 0.268431 | Eval Loss: 0.259533 | Time: 13.9s
+2026-02-07 08:53:52: Epoch [ 30/100] | Train Loss: 0.272743 | Eval Loss: 0.250693 | Time: 13.8s
+2026-02-07 08:54:02: Epoch [ 31/100] | Train Loss: 0.269300 | Eval Loss: 0.270235 | Time: 9.8s
+2026-02-07 08:54:14: Epoch [ 32/100] | Train Loss: 0.265815 | Eval Loss: 0.249180 | Time: 11.9s
+2026-02-07 08:54:28: Epoch [ 33/100] | Train Loss: 0.254461 | Eval Loss: 0.253988 | Time: 14.0s
+2026-02-07 08:54:42: Epoch [ 34/100] | Train Loss: 0.248169 | Eval Loss: 0.247543 | Time: 13.9s
+2026-02-07 08:54:56: Epoch [ 35/100] | Train Loss: 0.245348 | Eval Loss: 0.239221 | Time: 14.0s
+2026-02-07 08:55:07: Epoch [ 36/100] | Train Loss: 0.249244 | Eval Loss: 0.239627 | Time: 9.7s
+2026-02-07 08:55:20: Epoch [ 37/100] | Train Loss: 0.257536 | Eval Loss: 0.219970 | Time: 13.9s
+2026-02-07 08:55:33: Epoch [ 38/100] | Train Loss: 0.236051 | Eval Loss: 0.227799 | Time: 11.9s
+2026-02-07 08:55:47: Epoch [ 39/100] | Train Loss: 0.244644 | Eval Loss: 0.240585 | Time: 13.9s
+2026-02-07 08:56:00: Epoch [ 40/100] | Train Loss: 0.228525 | Eval Loss: 0.229141 | Time: 13.7s
+2026-02-07 08:56:10: Epoch [ 41/100] | Train Loss: 0.227340 | Eval Loss: 0.220072 | Time: 9.8s
+2026-02-07 08:56:22: Epoch [ 42/100] | Train Loss: 0.237566 | Eval Loss: 0.225184 | Time: 11.9s
+2026-02-07 08:56:36: Epoch [ 43/100] | Train Loss: 0.223617 | Eval Loss: 0.215070 | Time: 14.0s
+2026-02-07 08:56:50: Epoch [ 44/100] | Train Loss: 0.205843 | Eval Loss: 0.228689 | Time: 13.9s
+2026-02-07 08:57:00: Epoch [ 45/100] | Train Loss: 0.208752 | Eval Loss: 0.209135 | Time: 9.7s
+2026-02-07 08:57:12: Epoch [ 46/100] | Train Loss: 0.203779 | Eval Loss: 0.208054 | Time: 11.9s
+2026-02-07 08:57:26: Epoch [ 47/100] | Train Loss: 0.200160 | Eval Loss: 0.211478 | Time: 13.9s
+2026-02-07 08:57:40: Epoch [ 48/100] | Train Loss: 0.208637 | Eval Loss: 0.200762 | Time: 13.9s
+2026-02-07 08:57:50: Epoch [ 49/100] | Train Loss: 0.200958 | Eval Loss: 0.187875 | Time: 9.6s
+2026-02-07 08:58:04: Epoch [ 50/100] | Train Loss: 0.197716 | Eval Loss: 0.178162 | Time: 13.8s
+2026-02-07 08:58:17: Epoch [ 51/100] | Train Loss: 0.192511 | Eval Loss: 0.195340 | Time: 12.0s
+2026-02-07 08:58:31: Epoch [ 52/100] | Train Loss: 0.193722 | Eval Loss: 0.191988 | Time: 14.0s
+2026-02-07 08:58:45: Epoch [ 53/100] | Train Loss: 0.187299 | Eval Loss: 0.191231 | Time: 14.0s
+2026-02-07 08:58:54: Epoch [ 54/100] | Train Loss: 0.182487 | Eval Loss: 0.181838 | Time: 9.6s
+2026-02-07 08:59:06: Epoch [ 55/100] | Train Loss: 0.167259 | Eval Loss: 0.169976 | Time: 11.8s
+2026-02-07 08:59:20: Epoch [ 56/100] | Train Loss: 0.173826 | Eval Loss: 0.148650 | Time: 13.9s
+2026-02-07 08:59:34: Epoch [ 57/100] | Train Loss: 0.160530 | Eval Loss: 0.153952 | Time: 13.9s
+2026-02-07 08:59:44: Epoch [ 58/100] | Train Loss: 0.161875 | Eval Loss: 0.151247 | Time: 9.6s
+2026-02-07 08:59:57: Epoch [ 59/100] | Train Loss: 0.155901 | Eval Loss: 0.151273 | Time: 13.1s
+2026-02-07 09:00:10: Epoch [ 60/100] | Train Loss: 0.143924 | Eval Loss: 0.149492 | Time: 12.8s
+2026-02-07 09:00:24: Epoch [ 61/100] | Train Loss: 0.143700 | Eval Loss: 0.141350 | Time: 13.9s
+2026-02-07 09:00:38: Epoch [ 62/100] | Train Loss: 0.140080 | Eval Loss: 0.127726 | Time: 14.0s
+2026-02-07 09:00:48: Epoch [ 63/100] | Train Loss: 0.135959 | Eval Loss: 0.136280 | Time: 9.7s
+2026-02-07 09:01:00: Epoch [ 64/100] | Train Loss: 0.127279 | Eval Loss: 0.130360 | Time: 12.0s
+2026-02-07 09:01:14: Epoch [ 65/100] | Train Loss: 0.133812 | Eval Loss: 0.131621 | Time: 14.1s
+2026-02-07 09:01:28: Epoch [ 66/100] | Train Loss: 0.120307 | Eval Loss: 0.127938 | Time: 13.9s
+2026-02-07 09:01:38: Epoch [ 67/100] | Train Loss: 0.126944 | Eval Loss: 0.115008 | Time: 9.6s
+2026-02-07 09:01:50: Epoch [ 68/100] | Train Loss: 0.124003 | Eval Loss: 0.119784 | Time: 11.9s
+2026-02-07 09:02:04: Epoch [ 69/100] | Train Loss: 0.113777 | Eval Loss: 0.126946 | Time: 13.9s
+2026-02-07 09:02:18: Epoch [ 70/100] | Train Loss: 0.115906 | Eval Loss: 0.117690 | Time: 14.0s
+2026-02-07 09:02:28: Epoch [ 71/100] | Train Loss: 0.128235 | Eval Loss: 0.116483 | Time: 9.9s
+2026-02-07 09:02:42: Epoch [ 72/100] | Train Loss: 0.114379 | Eval Loss: 0.108107 | Time: 14.0s
+2026-02-07 09:02:54: Epoch [ 73/100] | Train Loss: 0.110064 | Eval Loss: 0.121001 | Time: 11.8s
+2026-02-07 09:03:08: Epoch [ 74/100] | Train Loss: 0.124246 | Eval Loss: 0.112873 | Time: 14.0s
+2026-02-07 09:03:18: Epoch [ 75/100] | Train Loss: 0.108141 | Eval Loss: 0.103679 | Time: 10.3s
+2026-02-07 09:03:32: Epoch [ 76/100] | Train Loss: 0.115067 | Eval Loss: 0.104707 | Time: 13.3s
+2026-02-07 09:03:43: Epoch [ 77/100] | Train Loss: 0.109595 | Eval Loss: 0.106278 | Time: 11.7s
+2026-02-07 09:03:57: Epoch [ 78/100] | Train Loss: 0.101322 | Eval Loss: 0.107226 | Time: 13.9s
+2026-02-07 09:04:07: Epoch [ 79/100] | Train Loss: 0.114256 | Eval Loss: 0.106921 | Time: 9.6s
+2026-02-07 09:04:21: Epoch [ 80/100] | Train Loss: 0.104707 | Eval Loss: 0.101163 | Time: 14.2s
+2026-02-07 09:04:33: Epoch [ 81/100] | Train Loss: 0.098418 | Eval Loss: 0.138196 | Time: 11.8s
+2026-02-07 09:04:47: Epoch [ 82/100] | Train Loss: 0.104033 | Eval Loss: 0.110017 | Time: 13.9s
+2026-02-07 09:04:57: Epoch [ 83/100] | Train Loss: 0.108824 | Eval Loss: 0.106175 | Time: 9.8s
+2026-02-07 09:05:11: Epoch [ 84/100] | Train Loss: 0.100795 | Eval Loss: 0.093975 | Time: 14.0s
+2026-02-07 09:05:23: Epoch [ 85/100] | Train Loss: 0.095966 | Eval Loss: 0.100787 | Time: 11.9s
+2026-02-07 09:05:37: Epoch [ 86/100] | Train Loss: 0.108162 | Eval Loss: 0.112202 | Time: 14.2s
+2026-02-07 09:05:51: Epoch [ 87/100] | Train Loss: 0.106246 | Eval Loss: 0.097765 | Time: 14.0s
+2026-02-07 09:06:01: Epoch [ 88/100] | Train Loss: 0.094384 | Eval Loss: 0.107522 | Time: 9.7s
+2026-02-07 09:06:13: Epoch [ 89/100] | Train Loss: 0.094910 | Eval Loss: 0.092082 | Time: 11.9s
+2026-02-07 09:06:27: Epoch [ 90/100] | Train Loss: 0.099828 | Eval Loss: 0.103339 | Time: 14.0s
+2026-02-07 09:06:41: Epoch [ 91/100] | Train Loss: 0.105614 | Eval Loss: 0.095081 | Time: 14.0s
+2026-02-07 09:06:51: Epoch [ 92/100] | Train Loss: 0.093591 | Eval Loss: 0.095898 | Time: 9.6s
+2026-02-07 09:07:02: Epoch [ 93/100] | Train Loss: 0.100431 | Eval Loss: 0.095473 | Time: 11.8s
+2026-02-07 09:07:16: Epoch [ 94/100] | Train Loss: 0.093476 | Eval Loss: 0.104677 | Time: 13.9s
+2026-02-07 09:07:30: Epoch [ 95/100] | Train Loss: 0.102356 | Eval Loss: 0.099127 | Time: 13.8s
+2026-02-07 09:07:40: Epoch [ 96/100] | Train Loss: 0.104377 | Eval Loss: 0.102466 | Time: 9.7s
+2026-02-07 09:07:52: Epoch [ 97/100] | Train Loss: 0.092485 | Eval Loss: 0.100902 | Time: 11.9s
+2026-02-07 09:08:06: Epoch [ 98/100] | Train Loss: 0.092629 | Eval Loss: 0.099021 | Time: 14.1s
+2026-02-07 09:08:20: Epoch [ 99/100] | Train Loss: 0.092503 | Eval Loss: 0.106895 | Time: 13.8s
+2026-02-07 09:08:29: Epoch [100/100] | Train Loss: 0.104987 | Eval Loss: 0.098657 | Time: 9.8s
+2026-02-07 09:08:29: 
+================================================================================
+2026-02-07 09:08:29: OVERFITTING TEST SUMMARY
+2026-02-07 09:08:29: ================================================================================
+2026-02-07 09:08:29: Final train loss: 0.104987
+2026-02-07 09:08:29: Final eval loss: 0.098657
+2026-02-07 09:08:29: Best eval loss: 0.092082
+2026-02-07 09:08:29: Total epochs run: 100
+2026-02-07 09:08:29: 
+Loss reduction: 1.046820 → 0.104987 (90.0%)
+2026-02-07 09:08:29: 
+⚠ PARTIAL: Model is learning but slowly (loss < 0.5)
+2026-02-07 09:08:29:   Consider: higher learning rate, more epochs, or check data augmentation.
+2026-02-07 09:08:29: ================================================================================

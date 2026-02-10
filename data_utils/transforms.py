@@ -46,6 +46,8 @@ class RandomCrop(object):
         
         landmarks = sample['landmarks']
 
+        surface = sample.get('surface', None) # new
+
         # Initialize min and max coordinates for landmarks
         min_ = np.ones((3,)) * 1000
         max_ = np.zeros((3,))
@@ -85,6 +87,11 @@ class RandomCrop(object):
 
         # Apply zoom to image and landmarks
         img, landmarks = zoomout_imgandlandmark(img, landmarks, [random_rate0, random_rate1, random_rate2])
+
+        # does this work????
+        if surface is not None:
+            surface = zoom(surface, [random_rate0, random_rate1, random_rate2], order=0)  # order=0 for binary mask NEW; ZOOM??
+
 
         ######################### cropping ###############################
         # Recalculate min/max after zoom
@@ -141,6 +148,21 @@ class RandomCrop(object):
             # Handle case where crop size is invalid
             cur_crop_img = np.zeros(self.size)  # or pad to required size
 
+        # ← NEU: Crop surface auch
+        if surface is not None:
+            cur_crop_surface = surface[cc:(cc + self.size[0]), ch:(ch + self.size[1]), cw:(cw + self.size[2])]
+
+            if cur_crop_surface.shape[0] != self.size[0] or cur_crop_surface.shape[1] != self.size[1] or cur_crop_surface.shape[2] != \
+                self.size[2]:
+                print(
+                    f"Error cropping surface: Crop start - ({cc}, {ch}, {cw}), Surface shape: {surface.shape}, Crop shape: {cur_crop_surface.shape}")
+                # Handle case where crop size is invalid
+                cur_crop_surface = np.zeros(self.size)  # or pad to required size
+            
+            sample['surface'] = cur_crop_surface
+
+
+            
         # Adjust landmarks based on the new crop coordinates
         pre_new_landmarks = []
         for landmark in landmarks:
@@ -282,6 +304,7 @@ class CenterCrop(object):
     def __call__(self, sample):
         img = sample['image']
         landmarks = sample['landmarks']
+        surface = sample.get('surface', None)
 
         min_ = np.ones((3,)) * 1000
         max_ = np.zeros((3,))
@@ -301,6 +324,10 @@ class CenterCrop(object):
         random_rate1 = min(zoom_max[1], 1)
         random_rate2 = min(zoom_max[2], 1)
         img, landmarks = zoomout_imgandlandmark(img, landmarks, [random_rate0, random_rate1, random_rate2])
+
+        # ← NEU: Zoom surface
+        if surface is not None:
+            surface = zoom(surface, [random_rate0, random_rate1, random_rate2], order=0)
 
         min_ = np.ones((3,)) * 1000
         max_ = np.zeros((3,))
@@ -324,6 +351,13 @@ class CenterCrop(object):
         # center crop here
         sample["image"] = img[begin[0]:begin[0] + self.size[0], begin[1]:begin[1] + self.size[1],
                           begin[2]:begin[2] + self.size[2]]
+        
+        if surface is not None:
+            sample["surface"] = surface[begin[0]:begin[0] + self.size[0], 
+                                       begin[1]:begin[1] + self.size[1],
+                                       begin[2]:begin[2] + self.size[2]]
+            
+
         landmarks[:, 0] = landmarks[:, 0] - begin[0]
         landmarks[:, 1] = landmarks[:, 1] - begin[1]
         landmarks[:, 2] = landmarks[:, 2] - begin[2]
@@ -408,4 +442,11 @@ class ToTensor(object):
         img = np.expand_dims(img, 0)
         sample['image'] = img
         sample['landmarks'] = sample['landmarks'].astype(np.float32)
+
+
+        # ← NEU: Surface zu tensor
+        if 'surface' in sample:
+            surface = np.array(sample['surface']).astype(np.float32)
+            # Surface braucht KEINE channel dimension - bleibt (H, W, D)
+            sample['surface'] = surface
         return sample
