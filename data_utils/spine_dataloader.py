@@ -293,7 +293,7 @@ class VertebraePOI(Dataset):
         else:
             bad_poi_list = [] 
 
-        print(f"\nBAD POI LIST: {bad_poi_list}\n")
+        #print(f"\nBAD POI LIST: {bad_poi_list}\n")
 
 
         
@@ -381,7 +381,7 @@ class VertebraePOI(Dataset):
                 list_idx = self.poi_idx_to_list_idx[bad_poi_id]
                 poi_array[list_idx] = -1000.0
 
-                print(f"Marking bad POI ID {bad_poi_id} at list index {list_idx} as invalid.")
+                #print(f"Marking bad POI ID {bad_poi_id} at list index {list_idx} as invalid.")
         
         # Mark missing POIs
         for missing_poi_id in missing_pois:
@@ -413,24 +413,31 @@ class VertebraePOI(Dataset):
 
 
         # ← NEU: Stelle sicher dass surface 3D ist
-        print(f"Original surface shape: {surface.shape}")
+        #print(f"Original surface shape: {surface.shape}")
         if surface.ndim == 4:
             surface = surface.squeeze(0)  # (1, H, W, D) → (H, W, D)
 
-            print(f"Surface squeezed to shape: {surface.shape}")
+            #print(f"Surface squeezed to shape: {surface.shape}")
         elif surface.ndim == 2:
             raise ValueError(f"Surface is 2D but should be 3D: {surface.shape}")
         _surface = surface.numpy()
         #print(f"Sample image shape: {_img.shape}")
 
-        
+        print(f"DEBUG: dataloader-offset: {offset}")
         
         sample = {
             'image': _img,
             'landmarks': _landmark,
             'spacing': _spacing,
             'filename': _filename,
-            'surface': _surface
+            'surface': _surface,
+            'metadata': {
+                'subject': subject,
+                'vertebra': vertebra,
+                'offset':  np.array(offset, dtype=np.float32),
+                'poi_path': poi_path,
+            }
+
         }
         
         if self.transform is not None:

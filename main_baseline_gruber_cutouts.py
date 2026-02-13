@@ -195,7 +195,9 @@ def main(args):
     eval_dataset = VertebraePOI(
         master_df=master_df,
         transform=eval_transform,
-        phase='val'
+        phase='val',
+        input_shape=args.input_shape,
+        project_gt=args.project_gt
     )
 
     evalloader = DataLoader(eval_dataset,
@@ -204,7 +206,6 @@ def main(args):
                             num_workers=8)
 
 
-    # TODO: ICH BIN HIER (REST NOCH VERBESSERN!!!)
     
     ########################## network training ##########################################
     # begin training here
@@ -375,7 +376,7 @@ def test(dataloader, net):
         '***************************************************************************'
     )
 
-def test_proj(dataloader, net):
+def test_proj(dataloader, net, args):
     start_time = time.time()
     net.eval()
     total_mre = []
@@ -384,30 +385,43 @@ def test_proj(dataloader, net):
     total_mre_projected = []
     total_mean_mre_projected = []
     
+    total_mse = []
+    total_mean_mse = []
+    total_mse_projected = []
+    total_mean_mse_projected = []
+
     N = 0
-    total_hits = np.zeros((8, 14))
-    total_hits_projected = np.zeros((8, 14))
+    total_hits = np.zeros((8, args.n_class))
+    total_hits_projected = np.zeros((8, args.n_class))
     
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
             data = sample['image']
             landmarks = sample['landmarks']
-            surface = sample.get('surface', None)  # ← Optional surface
+            surface = sample.get('surface', None) 
             spacing = sample['spacing']
             data = data.to(DEVICE)
             
             heatmap = net(data)
             
-            # Call metric_proj instead of metric
+            # Call metric_proj (with surface)
             if surface is not None:
-                mre, hits, mre_proj, hits_proj = metric_proj(
+                results = metric_proj(
                     heatmap.cpu().numpy(), 
                     spacing.numpy(), 
                     landmarks.cpu().numpy(),
                     surface_masks=surface.numpy()
                 )
+
+                mre, hits = results['mre']
+                mse, _ = results['mse']
+                mre_proj, hits_proj = results['mre_projected']
+                mse_proj, _ = results['mse_projected']
+
                 total_mre_projected.append(mre_proj)
+                total_mse_projected.append(mse_proj)
                 total_hits_projected += hits_proj
+                
                 
                 # Current projected MRE
                 cur_mre_proj = []
@@ -416,6 +430,15 @@ def test_proj(dataloader, net):
                         cur_mre_proj.append(mre_proj[0][cdx])
                 total_mean_mre_projected.append(np.mean(cur_mre_proj))
                 print("#: No.", i, "--the current projected MRE is [%.4f]" % np.mean(cur_mre_proj))
+                
+                cur_mse_proj = []
+                for cdx in range(len(mse_proj[0])):
+                    if mse_proj[0][cdx] > 0:
+                        cur_mse_proj.append(mse_proj[0][cdx])
+                total_mean_mse_projected.append(np.mean(cur_mse_proj))
+                print("#: No.", i, "--the current projected MSE is [%.4f]" % np.mean(cur_mse_proj))
+
+
             else:
                 mre, hits = metric(
                     heatmap.cpu().numpy(), 
@@ -425,6 +448,7 @@ def test_proj(dataloader, net):
             
             total_hits += hits
             total_mre.append(np.array(mre))
+            total_mse.append(np.array(mse))
             N += data.shape[0]
             
             # Current MRE
@@ -435,11 +459,22 @@ def test_proj(dataloader, net):
             total_mean_mre.append(np.mean(cur_mre))
             print("#: No.", i, "--the current MRE is [%.4f]" % np.mean(cur_mre))
     
+            cur_mse = []
+            for cdx in range(len(mse[0])):
+                if mse[0][cdx] > 0:
+                    cur_mse.append(mse[0][cdx])
+            total_mean_mse.append(np.mean(cur_mse))
+            print("#: No.", i, "--the current MSE is [%.4f]" % np.mean(cur_mse))
+    
     total_mre = np.concatenate(total_mre, 0)
+
+    total_mse = np.concatenate(total_mse, 0)
+
     
     # Concatenate projected MRE
     if len(total_mre_projected) > 0:
         total_mre_projected = np.concatenate(total_mre_projected, 0)
+        total_mse_projected = np.concatenate(total_mse_projected, 0)
     
     ################################ molar print ##############################################
     names = [
@@ -450,13 +485,15 @@ def test_proj(dataloader, net):
         '125', '127'
     ]
 
-    IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
+    IDs = ["MRE", "SD", "RMSE", "2.0", "2.5", "3.0", "4."]
     form = {"metric": IDs}
     mre = []
     sd = []
+    rmse = []
     
     mre_proj = []
     sd_proj = []
+    rmse_proj = []
     
     cur_hits = total_hits[:4] / total_hits[4:]
     
@@ -466,29 +503,50 @@ def test_proj(dataloader, net):
 
     ############################## each class mre ##############################################
     for i, name in enumerate(names):
-        # Projected MRE
+        # Projected metrics
         if len(total_mre_projected) > 0:
             cur_mre_proj = []
             for j in range(total_mre_projected.shape[0]):
                 if total_mre_projected[j, i] > 0:
                     cur_mre_proj.append(total_mre_projected[j, i])
+            
+            cur_mse_proj = []
+            for j in range(total_mse_projected.shape[0]):
+                if total_mse_projected[j, i] > 0:
+                    cur_mse_proj.append(total_mse_projected[j, i])            
+            
             cur_mre_proj = np.array(cur_mre_proj)
+            cur_mse_proj = np.array(cur_mse_proj)
+
+
             mre_proj.append(np.mean(cur_mre_proj))
             sd_proj.append(np.sqrt(np.sum(pow(np.array(cur_mre_proj) - np.mean(cur_mre_proj), 2)) / (N-1)))
-        
+            rmse_proj.append(np.sqrt(np.mean(cur_mse_proj))) # cur_mse_proj is already squared
+
         # Original MRE
         cur_mre = []
         for j in range(total_mre.shape[0]):
             if total_mre[j, i] > 0:
                 cur_mre.append(total_mre[j, i])
+
+        cur_mse = []
+        for j in range(total_mse.shape[0]):
+            if total_mse[j, i] > 0:
+                cur_mse.append(total_mse[j, i])
+
         cur_mre = np.array(cur_mre)
+        cur_mse = np.array(cur_mse)
+
         mre.append(np.mean(cur_mre))
+        rmse.append(np.sqrt(np.mean(cur_mse)))
         sd.append(np.sqrt(np.sum(pow(np.array(cur_mre) - np.mean(cur_mre), 2)) / (N-1)))
 
     ########################### Original results ######################################################
     mre = np.stack(mre, 0)
     sd = np.stack(sd, 0)
-    total = np.stack([mre, sd], 0)
+    rmse = np.stack(rmse, 0)
+    
+    total = np.stack([mre, sd, rmse ], 0)
     total = np.concatenate([total, cur_hits], 0)
     
     for i, name in enumerate(names):
@@ -501,7 +559,8 @@ def test_proj(dataloader, net):
     if len(total_mre_projected) > 0:
         mre_proj = np.stack(mre_proj, 0)
         sd_proj = np.stack(sd_proj, 0)
-        total_proj = np.stack([mre_proj, sd_proj], 0)
+        rmse_proj = np.stack(rmse_proj, 0)
+        total_proj = np.stack([mre_proj, sd_proj, rmse_proj], 0)
         total_proj = np.concatenate([total_proj, cur_hits_projected], 0)
         
         form_proj = {"metric": IDs}
@@ -514,11 +573,12 @@ def test_proj(dataloader, net):
     ########################### total mre ######################################################
     mmre = np.mean(total_mean_mre)
     sd = np.sqrt(np.sum(pow(np.array(total_mean_mre) - mmre, 2)) / (N-1))
-    
+    mrmse = np.sqrt(np.mean(total_mean_mse))
+
     total_hits_sum = np.sum(total_hits, 1)
     logging.info(
-        'Test-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
-            mmre, sd, 
+        'Test-- MRE: [%.2f] + SD: [%.2f], RMSE: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+            mmre, sd, mrmse,
             total_hits_sum[0] / total_hits_sum[4],
             total_hits_sum[1] / total_hits_sum[5],
             total_hits_sum[2] / total_hits_sum[6],
@@ -530,11 +590,12 @@ def test_proj(dataloader, net):
     if len(total_mre_projected) > 0:
         mmre_proj = np.mean(total_mean_mre_projected)
         sd_proj = np.sqrt(np.sum(pow(np.array(total_mean_mre_projected) - mmre_proj, 2)) / (N-1))
+        mrmse_proj = np.sqrt(np.mean(total_mean_mse_projected))
         
         total_hits_projected_sum = np.sum(total_hits_projected, 1)
         logging.info(
-            'Test projected-- MRE: [%.2f] + SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
-                mmre_proj, sd_proj, 
+            'Test projected-- MRE: [%.2f] + SD: [%.2f], RMSE: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+                mmre_proj, sd_proj, mrmse_proj,
                 total_hits_projected_sum[0] / total_hits_projected_sum[4],
                 total_hits_projected_sum[1] / total_hits_projected_sum[5],
                 total_hits_projected_sum[2] / total_hits_projected_sum[6],

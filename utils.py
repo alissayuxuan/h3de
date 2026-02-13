@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+from TPTBox import POI
 
 def setgpu(gpus):
     if gpus=='all':
@@ -75,15 +76,19 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
     n_class = heatmap.shape[1]
     
     total_mre = []
+    total_mse = []
     total_mre_projected = [] if surface_masks is not None else None
-    
+    total_mse_projected = [] if surface_masks is not None else None
+
     max_num = 500
     hits = np.zeros((8, n_class))
     hits_projected = np.zeros((8, n_class)) if surface_masks is not None else None
 
     for j in range(N):
         cur_mre_group = []
+        cur_mse_group = []
         cur_mre_projected_group = [] if surface_masks is not None else None
+        cur_mse_projected_group = [] if surface_masks is not None else None
         
         # Get surface for this batch if available
         surface = None
@@ -94,7 +99,6 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
         
         for i in range(n_class):
             # ==================== HEATMAP TO PREDICTION ====================
-            # Diese Berechnung nur EINMAL machen!
             max_count = 0
             group_rate = 0.999
             if np.max(heatmap[j,i]) > 0:
@@ -113,9 +117,11 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
             # ==================== ORIGINAL METRIC ====================
             cur_mre = np.linalg.norm(
                 np.array(landmarks[j,i] - h_predict_location)*spacing, ord=2)
+            cur_mse = cur_mre**2
 
             if np.mean(landmarks[j, i]) > 0:
-                cur_mre_group.append(cur_mre) 
+                cur_mre_group.append(cur_mre)
+                cur_mse_group.append(cur_mse) 
                 hits[4:, i] += 1
                 if cur_mre <= 2.0:
                     hits[0, i] += 1
@@ -127,6 +133,7 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
                     hits[3, i] += 1
             else:
                 cur_mre_group.append(-1)
+                cur_mse_group.append(-1)
             
             # ==================== PROJECTED METRIC (wenn surface gegeben) ====================
             if surface is not None:
@@ -150,9 +157,12 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
                         np.array(landmarks[j,i] - h_predict_location_projected)*spacing, 
                         ord=2
                     )
+                    cur_mse_projected = cur_mre_projected**2
                     
                     # Hits
                     cur_mre_projected_group.append(cur_mre_projected)
+                    cur_mse_projected_group.append(cur_mse_projected)
+
                     hits_projected[4:, i] += 1
                     if cur_mre_projected <= 2.0:
                         hits_projected[0, i] += 1
@@ -164,17 +174,29 @@ def metric_proj(heatmap, spacing, landmarks, surface_masks=None):
                         hits_projected[3, i] += 1
                 else:
                     cur_mre_projected_group.append(-1)
+                    cur_mse_projected_group.append(-1)
         
         total_mre.append(np.array(cur_mre_group))
+        total_mse.append(np.array(cur_mse_group))
         if surface is not None:
             total_mre_projected.append(np.array(cur_mre_projected_group))
+            total_mse_projected.append(np.array(cur_mse_projected_group))   
     
     # Return
-    if surface_masks is not None:
-        return (total_mre, hits, 
-                np.array(total_mre_projected), hits_projected)
-    else:
-        return total_mre, hits
+    #if surface_masks is not None:
+    #    return (total_mre, hits, 
+    #            np.array(total_mre_projected), hits_projected)
+    #else:
+    #    return total_mre, hits
+    results = {
+        'mre': (total_mre, hits),
+        'mse': (total_mse, hits)
+    }
+    if surface is not None:
+        results['mre_projected'] = (total_mre_projected, hits_projected)
+        results['mse_projected'] = (total_mse_projected, hits_projected)
+
+    return results
 
 def metricNew(heatmap, spacing, landmarks, output_file='predicted_coordinates.npy'):
     N = heatmap.shape[0]
@@ -332,9 +354,12 @@ def metric_proposal(proposal_map, spacing,
 
 
 def metric_proposal_proj(proposal_map, spacing, 
-                     landmarks, output_file, 
-                     shrink=4., anchors=[0.5, 1, 1.5, 2], n_class=14,
-                     surface_masks=None):  # ← NEU
+                    landmarks, output_file, 
+                    shrink=4., anchors=[0.5, 1, 1.5, 2], n_class=14,
+                    surface_masks=None,
+                    poi_metadata=None,
+                    poi_save_dir=None
+                    ): 
     select_number = 15 
     predicted_coordinates = []
     
@@ -361,17 +386,18 @@ def metric_proposal_proj(proposal_map, spacing,
             if isinstance(surface, np.ndarray):
                 surface = torch.from_numpy(surface).float()
         
+        voted_predictions = [] # collect predictions for this sample
+
         for idx in range(n_class):
             #################### from proposal map to landmarks #########################
-            # Diese Berechnung nur EINMAL machen! ←←← WICHTIG
             proposal_map_vector = proposal_map[:,:,:,:,:,3+idx].reshape(-1)
             mask = torch.zeros_like(proposal_map_vector)
             _, cur_idx = torch.topk(proposal_map_vector, select_number)
             mask[cur_idx] = 1
             mask_tensor = mask.reshape((batch_size, c, w, h, n_anchor, -1))
             select_index = np.where(mask_tensor.cpu().numpy()==1)
-               
-            # get predicted position (nur EINMAL berechnen!)
+            
+            # get predicted position 
             pred_pos = []
             for i in range(len(select_index[0])):
                 cur_pos = []
@@ -392,6 +418,12 @@ def metric_proposal_proj(proposal_map, spacing,
             
             # ==================== ORIGINAL METRIC ====================
             voted_pred = min_distance_voting(pred_pos)
+
+            if voted_pred.ndim > 1:
+                voted_pred = voted_pred.squeeze()
+
+            voted_predictions.append((idx, voted_pred))  # save prediction for this landmark
+
             cur_mre = np.linalg.norm(
                 (np.array(landmarks[j,idx]) - voted_pred)*spacing[j], ord=2
             )
@@ -456,6 +488,18 @@ def metric_proposal_proj(proposal_map, spacing,
                 h_predict_location_neg = np.ones_like(pred_pos) * -1
                 cur_predicted_coords.append(h_predict_location_neg)
         
+        # ======== Save POI ===========
+
+        print(f"DEBUG: metric_proposal_proj - batch {j}, voted_predictions shape: {voted_predictions}")
+        if poi_metadata is not None:
+            _save_poi_files_for_sample(
+                batch_idx=j,
+                voted_predictions=voted_predictions,
+                gt_landmarks=landmarks[j],
+                poi_metadata=poi_metadata,
+                save_dir=poi_save_dir
+            )
+            
         total_mre.append(np.array(cur_mre_group))
         if surface is not None:
             total_mre_projected.append(np.array(cur_mre_projected_group))
@@ -471,4 +515,184 @@ def metric_proposal_proj(proposal_map, spacing,
                 np.array(total_mre_projected), hits_projected)
     else:
         return total_mre, hits
-                
+
+
+def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks, 
+                                poi_metadata, save_dir):
+    """
+    Hilfsfunktion zum Speichern von GT und Prediction POI-Dateien
+    
+    Args:
+        batch_idx: Index im Batch
+        voted_predictions: Liste von (idx, coords) Tuples
+        gt_landmarks: Ground truth landmarks [n_class, 3]
+        poi_metadata: Dict mit Listen von poi_path, subject, vertebra, offset, target_indices
+        save_dir: Basisverzeichnis zum Speichern
+    """
+    
+    # Hole Metadaten für dieses Sample
+    poi_path = poi_metadata['poi_path'][batch_idx]
+    subject = poi_metadata['subject'][batch_idx]
+    vertebra = poi_metadata['vertebra'][batch_idx]
+    offset = poi_metadata['offset']#[batch_idx]  # numpy array [3]
+    
+    # ========== FIX: Flatten offset falls nötig ==========
+    if isinstance(offset, np.ndarray):
+        offset = offset.flatten()  # [[43, 43, 0]] → [43, 43, 0]
+    elif isinstance(offset, (list, tuple)):
+        offset = np.array(offset).flatten()
+
+    if torch.is_tensor(vertebra):
+        vertebra = vertebra.item()  # Tensor → Python int
+    else:
+        vertebra = int(vertebra)  # Sicherheitshalber
+
+    #target_indices = poi_metadata['target_indices']#[batch_idx]  # numpy array der gültigen POI-Indizes
+    target_indices = np.array([
+            81, 82, 83, 84, 85, 86, 87, 88, 89,
+            101, 102, 103, 104, 105, 106, 107, 108,
+            109, 110, 111, 112, 113, 114, 115, 116,
+            117, 118, 119, 120, 121, 122, 123, 124,
+            125, 127
+        ])
+    
+    # Lade Original-POI für Metadaten
+    original_poi = POI.load(poi_path)
+    origin = original_poi.origin
+    rotation = original_poi.rotation
+    shape = original_poi.shape
+    zoom = original_poi.zoom
+    orientation = original_poi.orientation
+
+
+    # debug
+    print(f"DEBUG: poi_path {poi_path}, subject {subject}, vertebra {vertebra}, offset {offset}")
+    
+    # Erstelle Save-Verzeichnisse
+    os.makedirs(os.path.join(save_dir, "predictions"), exist_ok=True)
+    os.makedirs(os.path.join(save_dir, "ground_truth"), exist_ok=True)
+    
+    # ==== PREDICTIONS SPEICHERN ====
+    pred_coords = np.array([coords for idx, coords in voted_predictions])
+    # FIX Shape (35, 1, 3) -> (35, 3)
+    #if pred_coords.ndim == 3 and pred_coords.shape[1] == 1:
+    #    pred_coords = pred_coords.squeeze(1)
+
+    print(f"DEBUG: pred_coords shape: {pred_coords.shape}")
+    print(f"DEBUG: target_indices shape: {target_indices.shape}")
+    print(f"DEBUG: gt_landmarks shape: {gt_landmarks.shape}")
+
+    valid_mask = np.mean(gt_landmarks, axis=1) > 0
+    print(f"DEBUG: valid_mask shape: {valid_mask.shape}, sum: {valid_mask.sum()}")
+
+    pred_coords_valid = pred_coords[valid_mask]
+    pred_indices_valid = target_indices[valid_mask]  # Nehme an, voted_predictions hat gleiche Reihenfolge wie target_indices
+    
+    print(f"DEBUG: pred_coords_valid shape: {pred_coords_valid.shape}")
+    print(f"DEBUG: pred_indices_valid shape: {pred_indices_valid.shape}")
+    print(f"DEBUG: pred_indices_valid: {pred_indices_valid}")
+
+    if len(pred_coords_valid) > 0:
+        pred_poi_valid = np_to_ctd(
+            pred_coords_valid,
+            vertebra,
+            origin,
+            rotation,
+            idx_list=pred_indices_valid,
+            shape=shape,
+            zoom=zoom,
+            offset=offset,
+            orientation=orientation
+        )
+    
+        pred_save_path = os.path.join(
+            save_dir, "predictions", 
+            f"{subject}_{vertebra}_pred.json"
+        )
+        pred_poi_valid.save(pred_save_path, verbose=False)
+
+        # Speichere auch globale Version
+        pred_global_path = pred_save_path.replace("_pred.json", "_pred_global.json")
+        pred_poi_valid.to_global().save_mrk(pred_global_path)
+
+        
+        
+    # ==== GROUND TRUTH SPEICHERN ====
+    gt_save_path = os.path.join(
+            save_dir, "ground_truth", 
+            f"{subject}_{vertebra}_gt_global.json"
+        )
+    
+    original_poi.to_global().save_mrk(gt_save_path)
+    # Filter nur gültige GT landmarks (nicht -1000)
+    #valid_mask = np.mean(gt_landmarks, axis=1) > 0
+    
+    """
+    gt_coords = gt_landmarks[valid_mask]
+    gt_indices = target_indices[valid_mask]
+
+    print(f"DEBUG: gt_coords shape: {gt_coords.shape}")
+    print(f"DEBUG: gt_indices shape: {gt_indices.shape}")
+    
+    if len(gt_coords) > 0:
+        gt_poi = np_to_ctd(
+            gt_coords,
+            vertebra,
+            origin,
+            rotation,
+            idx_list=gt_indices,
+            shape=shape,
+            zoom=zoom,
+            offset=offset,
+            orientation=orientation
+        )
+        
+        gt_save_path = os.path.join(
+            save_dir, "ground_truth",
+            f"{subject}_{vertebra}_gt.json"
+        )
+        gt_poi.save(gt_save_path, verbose=False)
+        
+        # Speichere auch globale Version
+        gt_global_path = gt_save_path.replace("_gt.json", "_gt_global.json")
+        gt_poi.to_global().save_mrk(gt_global_path)
+    """
+
+def np_to_ctd(
+    t,
+    vertebra,
+    origin,
+    rotation,
+    idx_list=None,
+    shape=(128, 128, 96),
+    zoom=(1, 1, 1),
+    offset=(0, 0, 0),
+    orientation=None,  # <- Neu: orientation als Argument
+):
+    ctd = {}
+
+    for i, coords in enumerate(t):
+        coords = np.array(coords).astype(float) - np.array(offset).astype(float)
+        coords = (coords[0], coords[1], coords[2])
+        if idx_list is None:
+            ctd[vertebra, i] = coords
+        elif i < len(idx_list):
+            ctd[vertebra, idx_list[i]] = coords
+    
+    ###
+    if orientation is None:
+        raise ValueError("You must provide the orientation of the input POI.")
+
+    ctd = POI(
+        centroids=ctd,
+        orientation=orientation,
+        zoom=zoom,
+        shape=shape,
+        origin=origin,
+        rotation=rotation,
+    )
+
+    # ctd.reorient_(axcodes_to=("L", "A", "S"), verbose=False).rescale_((1, 1, 1), verbose=False)
+
+    return ctd
+            

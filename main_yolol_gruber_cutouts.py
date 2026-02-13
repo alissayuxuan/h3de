@@ -406,8 +406,38 @@ def test_proj_pred(dataloader, net, args):
             surface = sample.get('surface', None)  # ← FIX: .get() falls surface nicht existiert
             spacing = sample['spacing']
             filename = sample['filename']
+
+            metadata = sample.get('metadata', None)  #
+
             data = data.to(DEVICE)
             proposal_map = net(data)
+
+            poi_metadata = None
+
+            if metadata is not None:
+                poi_metadata = {
+                    'subject': metadata['subject'],  
+                    'vertebra': metadata['vertebra'],  
+                    'offset': metadata['offset'],  
+                    'poi_path': metadata['poi_path'],  
+                }
+
+                # Falls offset/target_indices Tensors sind, zu numpy konvertieren
+                #if torch.is_tensor(poi_metadata['offset']):
+                #    poi_metadata['offset'] = poi_metadata['offset'].numpy()
+                #if torch.is_tensor(poi_metadata['target_indices']):
+                #    poi_metadata['target_indices'] = poi_metadata['target_indices'].numpy()
+
+                print(f"DEBUG: test_proj- poi_metadata[offset]: {poi_metadata['offset']}")
+                if isinstance(poi_metadata['offset'], list):
+                    # Liste von Tensors → Liste von numpy arrays
+                    poi_metadata['offset'] = [
+                        t.numpy() if torch.is_tensor(t) else np.array(t) 
+                        for t in poi_metadata['offset']
+                    ]
+                elif torch.is_tensor(poi_metadata['offset']):
+                    # Einzelner Tensor → numpy array
+                    poi_metadata['offset'] = poi_metadata['offset'].numpy()
 
             if surface is not None:
                 mre, hits, mre_proj, hits_proj = metric_proposal_proj(
@@ -418,7 +448,9 @@ def test_proj_pred(dataloader, net, args):
                     shrink=args.shrink, 
                     anchors=args.anchors, 
                     n_class=args.n_class,
-                    surface_masks=surface.numpy()
+                    surface_masks=surface.numpy(),
+                    poi_metadata=poi_metadata,  # ← Passiere die POI-Metadaten an die Funktion
+                    poi_save_dir=os.path.join(args.save_dir, "poi_files"),
                 )
                 total_mre_projected.append(mre_proj)
                 total_hits_projected += hits_proj
@@ -428,7 +460,11 @@ def test_proj_pred(dataloader, net, args):
                     if mre_proj[0][cdx] > 0:
                         cur_mre_proj.append(mre_proj[0][cdx])
                 total_mean_mre_projected.append(np.mean(cur_mre_proj))
-                print("#: No.", i, "--the current projected MRE is [%.4f]" % np.mean(cur_mre_proj))
+                
+                cur_mse_proj = np.sqrt(np.mean(np.array(cur_mre_proj)**2))
+
+                print("#: No.", i, "--the current projected MRE is [%.4f], MSE is [%.4f]" % (np.mean(cur_mre_proj), cur_mse_proj))
+
             else:
                 mre, hits = metric_proposal(
                     proposal_map, 
@@ -448,11 +484,12 @@ def test_proj_pred(dataloader, net, args):
                 if mre[0][cdx] > 0:
                     cur_mre.append(mre[0][cdx])
             total_mean_mre.append(np.mean(cur_mre))
-            print("#: No.", i, "--the current MRE is [%.4f]" % np.mean(cur_mre))
+
+            cur_mse = np.sqrt(np.mean(np.array(cur_mre)**2))
+            print("#: No.", i, "--the current MRE is [%.4f], MSE is [%.4f]" % (np.mean(cur_mre), cur_mse))
     
     total_mre = np.concatenate(total_mre, 0)
     
-    # ← FIX: Concatenate projected MRE auch!
     if len(total_mre_projected) > 0:
         total_mre_projected = np.concatenate(total_mre_projected, 0)
     
@@ -464,13 +501,15 @@ def test_proj_pred(dataloader, net, args):
         '117', '118', '119', '120', '121', '122', '123', '124',
         '125', '127'
     ]
-    IDs = ["MRE", "SD", "2.0", "2.5", "3.0", "4."]
+    IDs = ["MRE", "SD", "RMSE", "2.0", "2.5", "3.0", "4."]
     form = {"metric": IDs}
     mre = []
     sd = []
+    mse = []
 
     mre_proj = []
     sd_proj = []
+    mse_proj = []
 
     cur_hits = total_hits[:4] / total_hits[4:]
     
@@ -489,7 +528,8 @@ def test_proj_pred(dataloader, net, args):
             cur_mre_proj = np.array(cur_mre_proj)
             mre_proj.append(np.mean(cur_mre_proj))
             sd_proj.append(np.sqrt(np.sum(pow(np.array(cur_mre_proj) - np.mean(cur_mre_proj), 2)) / (N-1)))
-
+            mse_proj.append(np.sqrt(np.mean(cur_mre_proj**2)))
+            
         # Original MRE
         cur_mre = []
         for j in range(total_mre.shape[0]):
@@ -498,11 +538,13 @@ def test_proj_pred(dataloader, net, args):
         cur_mre = np.array(cur_mre)
         mre.append(np.mean(cur_mre))
         sd.append(np.sqrt(np.sum(pow(np.array(cur_mre) - np.mean(cur_mre), 2)) / (N-1)))
+        mse.append(np.sqrt(np.mean(cur_mre**2)))
     
     # Original results
     mre = np.stack(mre, 0)
     sd = np.stack(sd, 0)
-    total = np.stack([mre, sd], 0)
+    mse = np.stack(mse, 0)
+    total = np.stack([mre, sd, mse], 0)
     total = np.concatenate([total, cur_hits], 0)
     
     for i, name in enumerate(names):
@@ -515,7 +557,8 @@ def test_proj_pred(dataloader, net, args):
     if len(total_mre_projected) > 0:
         mre_proj = np.stack(mre_proj, 0)
         sd_proj = np.stack(sd_proj, 0)
-        total_proj = np.stack([mre_proj, sd_proj], 0)
+        mse_proj = np.stack(mse_proj, 0)
+        total_proj = np.stack([mre_proj, sd_proj, mse_proj], 0)
         total_proj = np.concatenate([total_proj, cur_hits_projected], 0)
         
         form_proj = {"metric": IDs}  # ← FIX: Neue form für projected
@@ -528,11 +571,12 @@ def test_proj_pred(dataloader, net, args):
     ########################### total mre ######################################################
     mmre = np.mean(total_mean_mre)
     sd = np.sqrt(np.sum(pow(np.array(total_mean_mre) - mmre, 2)) / (N-1))
+    mmse = np.sqrt(np.mean(np.array(total_mean_mre)**2))
     
     total_hits_sum = np.sum(total_hits, 1)
     logging.info(
-        'Test-- MRE: [%.2f] ± SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
-            mmre, sd, 
+        'Test-- MRE: [%.2f] ± SD: [%.2f], MSE: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+            mmre, sd, mmse,
             total_hits_sum[0] / total_hits_sum[4],
             total_hits_sum[1] / total_hits_sum[5],
             total_hits_sum[2] / total_hits_sum[6],
@@ -544,15 +588,16 @@ def test_proj_pred(dataloader, net, args):
     if len(total_mre_projected) > 0:
         mmre_proj = np.mean(total_mean_mre_projected)
         sd_proj = np.sqrt(np.sum(pow(np.array(total_mean_mre_projected) - mmre_proj, 2)) / (N-1))
-        
-        total_hits_projected_sum = np.sum(total_hits_projected, 1)  # ← FIX: Sum over landmarks
+        mmse_proj = np.sqrt(np.mean(np.array(total_mean_mre_projected)**2))
+
+        total_hits_projected_sum = np.sum(total_hits_projected, 1)  
         logging.info(
-            'Test projected-- MRE: [%.2f] ± SD: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
-                mmre_proj, sd_proj, 
-                total_hits_projected_sum[0] / total_hits_projected_sum[4],  # ← FIX
-                total_hits_projected_sum[1] / total_hits_projected_sum[5],  # ← FIX
-                total_hits_projected_sum[2] / total_hits_projected_sum[6],  # ← FIX
-                total_hits_projected_sum[3] / total_hits_projected_sum[7],  # ← FIX
+            'Test projected-- MRE: [%.2f] ± SD: [%.2f], MSE: [%.2f], 2.0 mm: [%.4f], 2.5 mm: [%.4f], 3.0 mm: [%.4f], 4.0 mm: [%.4f], using time: %.1f s!' % (
+                mmre_proj, sd_proj, mmse_proj,
+                total_hits_projected_sum[0] / total_hits_projected_sum[4], 
+                total_hits_projected_sum[2] / total_hits_projected_sum[6],  
+                total_hits_projected_sum[1] / total_hits_projected_sum[5],  
+                total_hits_projected_sum[3] / total_hits_projected_sum[7],  
                 time.time()-start_time))
         logging.info('*' * 79)
 
