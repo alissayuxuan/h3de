@@ -369,8 +369,8 @@ class CenterCrop(object):
 
 
         # ← NEU: Offset-Informationen mitspeichern
-        sample["crop_begin"] = begin          # shape (3,)
-        sample["crop_rate"] = rate            # shape (3,)
+        sample["crop_begin"] = np.array(begin, dtype=np.float32)#begin          # shape (3,)
+        sample["crop_rate"] = np.array(rate, dtype=np.float32)#rate            # shape (3,)
         return sample
     
 class Normalize(object):

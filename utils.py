@@ -356,11 +356,12 @@ def metric_proposal(proposal_map, spacing,
 def metric_proposal_proj(proposal_map, spacing, 
                     landmarks, output_file, 
                     shrink=4., anchors=[0.5, 1, 1.5, 2], n_class=14,
-                    surface_masks=None,
                     poi_metadata=None,
                     poi_save_dir=None,
                     crop_rate=1,
-                    crop_begin=0
+                    crop_begin=0,
+                    project_pred=False,
+                    surface_masks=None
                     ): 
     select_number = 15 
     predicted_coordinates = []
@@ -372,13 +373,13 @@ def metric_proposal_proj(proposal_map, spacing,
     n_anchor = proposal_map.size(4)
     
     total_mre = []
-    total_mre_projected = [] if surface_masks is not None else None  # ← NEU
+    total_mre_projected = [] if project_pred else None  # ← NEU
     hits = np.zeros((8, n_class))
-    hits_projected = np.zeros((8, n_class)) if surface_masks is not None else None  # ← NEU
+    hits_projected = np.zeros((8, n_class)) if project_pred else None  # ← NEU
     
     for j in range(batch_size):
         cur_mre_group = []
-        cur_mre_projected_group = [] if surface_masks is not None else None
+        cur_mre_projected_group = [] if project_pred else None
         cur_predicted_coords = []
         
         # Get surface for this batch if available
@@ -440,7 +441,7 @@ def metric_proposal_proj(proposal_map, spacing,
                 hits[3, idx] += 1
             
             # ==================== PROJECTED METRIC (wenn surface gegeben) ====================
-            if surface is not None:
+            if project_pred:
                 from misc import surface_project_coords
                 
                 # Skip invalid landmarks
@@ -504,7 +505,7 @@ def metric_proposal_proj(proposal_map, spacing,
             )
             
         total_mre.append(np.array(cur_mre_group))
-        if surface is not None:
+        if project_pred:
             total_mre_projected.append(np.array(cur_mre_projected_group))
         predicted_coordinates.append(cur_predicted_coords)
     
@@ -513,7 +514,7 @@ def metric_proposal_proj(proposal_map, spacing,
     np.save(output_file, predicted_coordinates)
     
     # Return
-    if surface_masks is not None:
+    if project_pred:
         return (total_mre, hits, 
                 np.array(total_mre_projected), hits_projected)
     else:
@@ -539,7 +540,6 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     vertebra = poi_metadata['vertebra'][batch_idx]
     offset = poi_metadata['offset']#[batch_idx]  # numpy array [3]
 
-    print(f"DEBUG: poi_path {poi_path}, subject {subject}, vertebra {vertebra}")
     
     # ========== FIX: Flatten offset falls nötig ==========
     if isinstance(offset, np.ndarray):
@@ -564,11 +564,6 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     # Lade Original-POI für Metadaten
     original_poi = POI.load(poi_path)
 
-    print(f"\n{'='*60}")
-    print(f"POI origin: {original_poi.origin}")
-    print(f"POI zoom: {original_poi.zoom}")
-    print(f"POI shape: {original_poi.shape}")
-    print(f"Padding offset: {offset}")
 
     origin = original_poi.origin
     rotation = original_poi.rotation
@@ -595,8 +590,6 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     crop_begin = np.array(crop_begin, dtype=float).squeeze()  # (1,3) → (3,)
     crop_rate = np.array(crop_rate, dtype=float).squeeze()
 
-    print(f"DEBUG: restored shape: {restored.shape}")
-    print(f"DEBUG: crop_begin: {crop_begin}, crop_rate: {crop_rate}")
     
     # Inverse: erst begin addieren (undo crop), dann durch rate teilen (undo zoom)
     restored[:, 0] = (restored[:, 0] + crop_begin[0]) / crop_rate[0]
@@ -632,14 +625,14 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
         
         
     # ==== GROUND TRUTH SPEICHERN ====
-    #gt_save_path = os.path.join(
-    #        save_dir, "ground_truth", 
-    #        f"{subject}_{vertebra}_gt_global.json"
-    #    )
+    gt_save_path = os.path.join(
+            save_dir, "ground_truth", 
+            f"{subject}_{vertebra}_gt_global.json"
+        )
     
-    #original_poi.to_global().save_mrk(gt_save_path)
+    original_poi.to_global().save_mrk(gt_save_path)
     
-    
+    """
     gt_coords = gt_landmarks[valid_mask]
     gt_indices = target_indices[valid_mask]
 
@@ -654,10 +647,6 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     gt_restored[:, 1] = (gt_restored[:, 1] + crop_begin[1]) / crop_rate[1]
     gt_restored[:, 2] = (gt_restored[:, 2] + crop_begin[2]) / crop_rate[2]
     
-
-    print(f"DEBUG: gt_coords: {gt_coords}")
-    print(f"DEBUG: gt_restored: {gt_restored}")   
-
     
     if len(gt_coords) > 0:
         gt_poi = np_to_ctd(
@@ -681,40 +670,7 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
         # Speichere auch globale Version
         gt_global_path = gt_save_path.replace("_gt.json", "_gt_global.json")
         gt_poi.to_global().save_mrk(gt_global_path)
-
-
-        ########## DEBUG 
-
-        
-
-        original_poi_coords = [
-            (
-                np.array((-1, -1, -1))
-                if not (vertebra, p_idx) in original_poi.keys()
-                else np.array(original_poi.centroids[vertebra, p_idx])
-            )
-            for p_idx in target_indices
-        ]
-
-        gt_poi_coords = [
-            (
-                np.array((-1, -1, -1))
-                if not (vertebra, p_idx) in gt_poi.keys()
-                else np.array(gt_poi.centroids[vertebra, p_idx])
-            )
-            for p_idx in target_indices
-        ]
-
-        print(f"DEBUG: gt_poi_coords: {gt_poi_coords}" )
-        print(f"\nDEBUG: original_poi_coords: {original_poi_coords}" )
-
-        diff = np.array(gt_poi_coords) - np.array(original_poi_coords)
-        print(f"DEBUG: diff: {diff}")
-
-
-    
-
-
+    """
     
 
 def np_to_ctd(

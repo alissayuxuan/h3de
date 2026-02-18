@@ -311,6 +311,8 @@ class VertebraePOI(Dataset):
         subreg, offset = self.preprocess_nifti(subreg_path, is_img=False)
         vertseg, _ = self.preprocess_nifti(msk_path, is_img=False)
 
+        print(f"sub: {subject}, vert: {vertebra}")
+
         if self.show_neighbors:
             vertseg_label = vertseg.unique()
             # Define neighbor vertebrae
@@ -410,19 +412,13 @@ class VertebraePOI(Dataset):
 
 
         # ← NEU: Stelle sicher dass surface 3D ist
-        #print(f"Original surface shape: {surface.shape}")
         if surface.ndim == 4:
             surface = surface.squeeze(0)  # (1, H, W, D) → (H, W, D)
 
-            #print(f"Surface squeezed to shape: {surface.shape}")
         elif surface.ndim == 2:
             raise ValueError(f"Surface is 2D but should be 3D: {surface.shape}")
         _surface = surface.numpy()
-        #print(f"Sample image shape: {_img.shape}")
 
-        #print(f"DEBUG: dataloader-offset: {offset}")
-
-        print(f"DEBUG: dataloader _landmark: {_landmark}")
         
         sample = {
             'image': _img,

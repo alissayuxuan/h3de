@@ -60,7 +60,8 @@ parser.add_argument('--n_class',default=35,type=int, help='number of landmarks 3
 parser.add_argument('--shrink',default=4,type=int,metavar='shrink')
 # the anchor balls default r=[0.5u, 0.75u, 1u, 1.25u]
 parser.add_argument('--anchors',
-                    default=[0.5, 0.75, 1., 1.25],
+                    #default=[0.5, 0.75, 1., 1.25],
+                    default=[0.5, 0.75, 1.],
                     #type=list,
                     type=float,
                     nargs='+',
@@ -162,10 +163,10 @@ def main(args):
                                  num_workers=4)
         os.makedirs(os.path.join(args.save_dir, "hz_yolol_gruber_all"), exist_ok=True) # added by alissa
 
-        if args.project_pred:
-            test_proj_pred(testloader, net, args)
-        else:
-            test(testloader, net, args)
+        #if args.project_pred:
+        test_proj_pred(testloader, net, args)
+        #else:
+        #    test(testloader, net, args)
         return
 
 
@@ -443,7 +444,6 @@ def test_proj_pred(dataloader, net, args):
                 #if torch.is_tensor(poi_metadata['target_indices']):
                 #    poi_metadata['target_indices'] = poi_metadata['target_indices'].numpy()
 
-                print(f"DEBUG: test_proj- poi_metadata[offset]: {poi_metadata['offset']}")
                 if isinstance(poi_metadata['offset'], list):
                     # Liste von Tensors → Liste von numpy arrays
                     poi_metadata['offset'] = [
@@ -454,7 +454,7 @@ def test_proj_pred(dataloader, net, args):
                     # Einzelner Tensor → numpy array
                     poi_metadata['offset'] = poi_metadata['offset'].numpy()
 
-            if surface is not None:
+            if args.project_pred:
                 mre, hits, mre_proj, hits_proj = metric_proposal_proj(
                     proposal_map, 
                     spacing.numpy(),
@@ -463,11 +463,12 @@ def test_proj_pred(dataloader, net, args):
                     shrink=args.shrink, 
                     anchors=args.anchors, 
                     n_class=args.n_class,
-                    surface_masks=surface.numpy(),
                     poi_metadata=poi_metadata,  # ← Passiere die POI-Metadaten an die Funktion
                     poi_save_dir=os.path.join(args.save_dir, "poi_files"),
                     crop_rate=crop_rate,
-                    crop_begin=crop_begin
+                    crop_begin=crop_begin,
+                    surface_masks=surface.numpy(), 
+                    project_pred=args.project_pred  
                 )
                 total_mre_projected.append(mre_proj)
                 total_hits_projected += hits_proj
@@ -483,6 +484,7 @@ def test_proj_pred(dataloader, net, args):
                 print("#: No.", i, "--the current projected MRE is [%.4f], MSE is [%.4f]" % (np.mean(cur_mre_proj), cur_mse_proj))
 
             else:
+                """
                 mre, hits = metric_proposal(
                     proposal_map, 
                     spacing.numpy(),
@@ -491,7 +493,22 @@ def test_proj_pred(dataloader, net, args):
                     shrink=args.shrink, 
                     anchors=args.anchors, 
                     n_class=args.n_class
-                )            
+                ) """
+                mre, hits = metric_proposal_proj(
+                    proposal_map, 
+                    spacing.numpy(),
+                    landmarks.numpy(), 
+                    os.path.join(args.save_dir, "hz_yolol_gruber_all", filename[0]), 
+                    shrink=args.shrink, 
+                    anchors=args.anchors, 
+                    n_class=args.n_class,
+                    poi_metadata=poi_metadata,  # ← Passiere die POI-Metadaten an die Funktion
+                    poi_save_dir=os.path.join(args.save_dir, "poi_files"),
+                    crop_rate=crop_rate,
+                    crop_begin=crop_begin,
+                    surface_masks=surface.numpy(), 
+                    project_pred=args.project_pred  
+                )           
             
             total_hits += hits
             total_mre.append(np.array(mre))
