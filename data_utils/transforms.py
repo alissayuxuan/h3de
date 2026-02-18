@@ -319,6 +319,10 @@ class CenterCrop(object):
         zoom_max = [self.size[0] / (max_[0] - min_[0]) - 0.02, self.size[1] / (max_[1] - min_[1]) - 0.02,
                     self.size[2] / (max_[2] - min_[2]) - 0.04]
 
+        rate = np.array([min(zoom_max[0], 1),
+                         min(zoom_max[1], 1),
+                         min(zoom_max[2], 1)])
+        
         ######################### zoom out #############################
         random_rate0 = min(zoom_max[0], 1)
         random_rate1 = min(zoom_max[1], 1)
@@ -362,7 +366,13 @@ class CenterCrop(object):
         landmarks[:, 1] = landmarks[:, 1] - begin[1]
         landmarks[:, 2] = landmarks[:, 2] - begin[2]
         sample["landmarks"] = landmarks
+
+
+        # ← NEU: Offset-Informationen mitspeichern
+        sample["crop_begin"] = begin          # shape (3,)
+        sample["crop_rate"] = rate            # shape (3,)
         return sample
+    
 class Normalize(object):
     def __init__(self):
         pass

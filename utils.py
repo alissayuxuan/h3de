@@ -358,7 +358,9 @@ def metric_proposal_proj(proposal_map, spacing,
                     shrink=4., anchors=[0.5, 1, 1.5, 2], n_class=14,
                     surface_masks=None,
                     poi_metadata=None,
-                    poi_save_dir=None
+                    poi_save_dir=None,
+                    crop_rate=1,
+                    crop_begin=0
                     ): 
     select_number = 15 
     predicted_coordinates = []
@@ -490,14 +492,15 @@ def metric_proposal_proj(proposal_map, spacing,
         
         # ======== Save POI ===========
 
-        print(f"DEBUG: metric_proposal_proj - batch {j}, voted_predictions shape: {voted_predictions}")
         if poi_metadata is not None:
             _save_poi_files_for_sample(
                 batch_idx=j,
                 voted_predictions=voted_predictions,
                 gt_landmarks=landmarks[j],
                 poi_metadata=poi_metadata,
-                save_dir=poi_save_dir
+                save_dir=poi_save_dir,
+                crop_rate=crop_rate,
+                crop_begin=crop_begin
             )
             
         total_mre.append(np.array(cur_mre_group))
@@ -518,7 +521,7 @@ def metric_proposal_proj(proposal_map, spacing,
 
 
 def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks, 
-                                poi_metadata, save_dir):
+                                poi_metadata, save_dir, crop_rate, crop_begin):
     """
     Hilfsfunktion zum Speichern von GT und Prediction POI-Dateien
     
@@ -535,6 +538,8 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     subject = poi_metadata['subject'][batch_idx]
     vertebra = poi_metadata['vertebra'][batch_idx]
     offset = poi_metadata['offset']#[batch_idx]  # numpy array [3]
+
+    print(f"DEBUG: poi_path {poi_path}, subject {subject}, vertebra {vertebra}")
     
     # ========== FIX: Flatten offset falls nötig ==========
     if isinstance(offset, np.ndarray):
@@ -558,15 +563,19 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     
     # Lade Original-POI für Metadaten
     original_poi = POI.load(poi_path)
+
+    print(f"\n{'='*60}")
+    print(f"POI origin: {original_poi.origin}")
+    print(f"POI zoom: {original_poi.zoom}")
+    print(f"POI shape: {original_poi.shape}")
+    print(f"Padding offset: {offset}")
+
     origin = original_poi.origin
     rotation = original_poi.rotation
     shape = original_poi.shape
     zoom = original_poi.zoom
     orientation = original_poi.orientation
 
-
-    # debug
-    print(f"DEBUG: poi_path {poi_path}, subject {subject}, vertebra {vertebra}, offset {offset}")
     
     # Erstelle Save-Verzeichnisse
     os.makedirs(os.path.join(save_dir, "predictions"), exist_ok=True)
@@ -574,27 +583,32 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
     
     # ==== PREDICTIONS SPEICHERN ====
     pred_coords = np.array([coords for idx, coords in voted_predictions])
-    # FIX Shape (35, 1, 3) -> (35, 3)
-    #if pred_coords.ndim == 3 and pred_coords.shape[1] == 1:
-    #    pred_coords = pred_coords.squeeze(1)
-
-    print(f"DEBUG: pred_coords shape: {pred_coords.shape}")
-    print(f"DEBUG: target_indices shape: {target_indices.shape}")
-    print(f"DEBUG: gt_landmarks shape: {gt_landmarks.shape}")
 
     valid_mask = np.mean(gt_landmarks, axis=1) > 0
-    print(f"DEBUG: valid_mask shape: {valid_mask.shape}, sum: {valid_mask.sum()}")
 
     pred_coords_valid = pred_coords[valid_mask]
     pred_indices_valid = target_indices[valid_mask]  # Nehme an, voted_predictions hat gleiche Reihenfolge wie target_indices
+    gt_landmarks_valid = gt_landmarks[valid_mask]
+
+    restored = np.array(pred_coords_valid, dtype=float)
+
+    crop_begin = np.array(crop_begin, dtype=float).squeeze()  # (1,3) → (3,)
+    crop_rate = np.array(crop_rate, dtype=float).squeeze()
+
+    print(f"DEBUG: restored shape: {restored.shape}")
+    print(f"DEBUG: crop_begin: {crop_begin}, crop_rate: {crop_rate}")
     
-    print(f"DEBUG: pred_coords_valid shape: {pred_coords_valid.shape}")
-    print(f"DEBUG: pred_indices_valid shape: {pred_indices_valid.shape}")
-    print(f"DEBUG: pred_indices_valid: {pred_indices_valid}")
+    # Inverse: erst begin addieren (undo crop), dann durch rate teilen (undo zoom)
+    restored[:, 0] = (restored[:, 0] + crop_begin[0]) / crop_rate[0]
+    restored[:, 1] = (restored[:, 1] + crop_begin[1]) / crop_rate[1]
+    restored[:, 2] = (restored[:, 2] + crop_begin[2]) / crop_rate[2]
+
+
+
 
     if len(pred_coords_valid) > 0:
         pred_poi_valid = np_to_ctd(
-            pred_coords_valid,
+            restored,#pred_coords_valid,
             vertebra,
             origin,
             rotation,
@@ -618,25 +632,36 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
         
         
     # ==== GROUND TRUTH SPEICHERN ====
-    gt_save_path = os.path.join(
-            save_dir, "ground_truth", 
-            f"{subject}_{vertebra}_gt_global.json"
-        )
+    #gt_save_path = os.path.join(
+    #        save_dir, "ground_truth", 
+    #        f"{subject}_{vertebra}_gt_global.json"
+    #    )
     
-    original_poi.to_global().save_mrk(gt_save_path)
-    # Filter nur gültige GT landmarks (nicht -1000)
-    #valid_mask = np.mean(gt_landmarks, axis=1) > 0
+    #original_poi.to_global().save_mrk(gt_save_path)
     
-    """
+    
     gt_coords = gt_landmarks[valid_mask]
     gt_indices = target_indices[valid_mask]
 
-    print(f"DEBUG: gt_coords shape: {gt_coords.shape}")
-    print(f"DEBUG: gt_indices shape: {gt_indices.shape}")
+
+    gt_restored = np.array(gt_coords, dtype=float)
+    crop_begin = np.array(crop_begin, dtype=float)
+    crop_rate = np.array(crop_rate, dtype=float)
+
+    
+    # Inverse: erst begin addieren (undo crop), dann durch rate teilen (undo zoom)
+    gt_restored[:, 0] = (gt_restored[:, 0] + crop_begin[0]) / crop_rate[0]
+    gt_restored[:, 1] = (gt_restored[:, 1] + crop_begin[1]) / crop_rate[1]
+    gt_restored[:, 2] = (gt_restored[:, 2] + crop_begin[2]) / crop_rate[2]
+    
+
+    print(f"DEBUG: gt_coords: {gt_coords}")
+    print(f"DEBUG: gt_restored: {gt_restored}")   
+
     
     if len(gt_coords) > 0:
         gt_poi = np_to_ctd(
-            gt_coords,
+            gt_restored,
             vertebra,
             origin,
             rotation,
@@ -656,7 +681,41 @@ def _save_poi_files_for_sample(batch_idx, voted_predictions, gt_landmarks,
         # Speichere auch globale Version
         gt_global_path = gt_save_path.replace("_gt.json", "_gt_global.json")
         gt_poi.to_global().save_mrk(gt_global_path)
-    """
+
+
+        ########## DEBUG 
+
+        
+
+        original_poi_coords = [
+            (
+                np.array((-1, -1, -1))
+                if not (vertebra, p_idx) in original_poi.keys()
+                else np.array(original_poi.centroids[vertebra, p_idx])
+            )
+            for p_idx in target_indices
+        ]
+
+        gt_poi_coords = [
+            (
+                np.array((-1, -1, -1))
+                if not (vertebra, p_idx) in gt_poi.keys()
+                else np.array(gt_poi.centroids[vertebra, p_idx])
+            )
+            for p_idx in target_indices
+        ]
+
+        print(f"DEBUG: gt_poi_coords: {gt_poi_coords}" )
+        print(f"\nDEBUG: original_poi_coords: {original_poi_coords}" )
+
+        diff = np.array(gt_poi_coords) - np.array(original_poi_coords)
+        print(f"DEBUG: diff: {diff}")
+
+
+    
+
+
+    
 
 def np_to_ctd(
     t,

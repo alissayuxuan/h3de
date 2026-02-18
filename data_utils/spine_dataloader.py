@@ -228,7 +228,7 @@ class VertebraePOI(Dataset):
         
         # Validation
         if len(self.master_df) == 0:
-            raise ValueError(f"Hallo, No samples with valid POIs found for phase '{phase}'!")
+            raise ValueError(f"No samples with valid POIs found for phase '{phase}'!")
         
         # Store other params
         self.transform = transform
@@ -254,6 +254,7 @@ class VertebraePOI(Dataset):
         Preprocessing wie in deinem Original-Dataset
         """
         nii = NII.load(nii_path, seg=not is_img)
+
         nii.rescale_and_reorient_(
             axcodes_to=("L", "A", "S"), 
             voxel_spacing=self.zoom, 
@@ -264,7 +265,6 @@ class VertebraePOI(Dataset):
             nii = nii.normalize_ct(min_out=0, max_out=1, inplace=True)
         
         array = nii.get_array()
-        
         # Padding
         array, offset = pad_array_to_shape(array, self.input_shape)
 
@@ -285,16 +285,11 @@ class VertebraePOI(Dataset):
         # temporär
         file_dir = row["file_dir"]
 
-        # TODO: wie bad_pois filtern???
-
         if "bad_poi_list" in self.master_df.columns:
             bad_poi_list = ast.literal_eval(row["bad_poi_list"])
             bad_poi_list = [int(poi) for poi in bad_poi_list] 
         else:
             bad_poi_list = [] 
-
-        #print(f"\nBAD POI LIST: {bad_poi_list}\n")
-
 
         
         # Lade paths
@@ -347,6 +342,11 @@ class VertebraePOI(Dataset):
 
             ct, _ = self.preprocess_nifti(ct_path, is_img=True)
             input_data = ct * mask
+        
+        elif self.input_data_type == "ct_raw":
+            
+            ct, _ = self.preprocess_nifti(ct_path, is_img=True)
+            input_data = ct
             
         elif self.input_data_type == "subreg":
 
@@ -401,9 +401,6 @@ class VertebraePOI(Dataset):
                 surface
             )
        
-
-
-        
         _spacing = np.array(self.spacing[index])
         _filename = self.filename[index]
         
@@ -423,7 +420,9 @@ class VertebraePOI(Dataset):
         _surface = surface.numpy()
         #print(f"Sample image shape: {_img.shape}")
 
-        print(f"DEBUG: dataloader-offset: {offset}")
+        #print(f"DEBUG: dataloader-offset: {offset}")
+
+        print(f"DEBUG: dataloader _landmark: {_landmark}")
         
         sample = {
             'image': _img,

@@ -61,7 +61,9 @@ parser.add_argument('--shrink',default=4,type=int,metavar='shrink')
 # the anchor balls default r=[0.5u, 0.75u, 1u, 1.25u]
 parser.add_argument('--anchors',
                     default=[0.5, 0.75, 1., 1.25],
-                    type=list,
+                    #type=list,
+                    type=float,
+                    nargs='+',
                     metavar='anchors',
                     help='the anchor balls to predict')
 # the test flag | -1 for train, 0 for eval, 1 for test |
@@ -72,6 +74,9 @@ parser.add_argument('--master_df_path', default='./gruber_dataset_cutouts/cutout
 parser.add_argument('--input_shape', default=[215, 215, 144], type=int, nargs=3,
                     help='Input shape as three integers (H W D)')
 
+parser.add_argument('--input_data_type', default='ct', type=str,
+                    help='Input data type: ct, vertseg, subreg, ct_raw')
+
 parser.add_argument('--project_gt', action='store_true', help='project GT to surface')
 
 parser.add_argument('--project_pred', action='store_true', help='project predictions to surface')
@@ -81,7 +86,10 @@ DEVICE = torch.device("cuda" if True else "cpu")
 def main(args):
     logging.info(args)
     cudnn.benchmark = True
+    #setgpu(args.gpu)
+    print(f"Setting GPU: {args.gpu}")
     setgpu(args.gpu)
+    print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
 
     ########################### model init #############################################
     net = globals()[args.model_name](n_class=args.n_class, n_anchor=len(args.anchors))
@@ -145,6 +153,7 @@ def main(args):
             phase=phase,
             data_type=args.data_type,
             input_shape=args.input_shape,
+            input_data_type=args.input_data_type,
             project_gt=args.project_gt
         )
         testloader = DataLoader(test_dataset,
@@ -164,7 +173,8 @@ def main(args):
     # if the test_flag <= -1, begin network training
     # train set and validation set preprocessing
     train_transform = transforms.Compose([
-        tr.RandomCrop(), # zoom and random crop for data augumentation
+        #tr.RandomCrop(), # zoom and random crop for data augumentation
+        tr.CenterCrop(),
         tr.LandmarkProposal(shrink=args.shrink, anchors=args.anchors), # generate the anchor proposal
         #tr.Normalize(),
         tr.ToTensor(),
@@ -182,6 +192,7 @@ def main(args):
         phase='train',
         data_type=args.data_type,
         input_shape=args.input_shape,
+        input_data_type=args.input_data_type,
         project_gt=args.project_gt
     )
 
@@ -207,6 +218,7 @@ def main(args):
         phase='val',
         data_type=args.data_type,
         input_shape=args.input_shape,
+        input_data_type=args.input_data_type,
         project_gt=args.project_gt
     )
 
@@ -409,6 +421,9 @@ def test_proj_pred(dataloader, net, args):
 
             metadata = sample.get('metadata', None)  #
 
+            crop_rate = sample.get('crop_rate', None)  
+            crop_begin = sample.get('crop_begin', None) 
+
             data = data.to(DEVICE)
             proposal_map = net(data)
 
@@ -451,6 +466,8 @@ def test_proj_pred(dataloader, net, args):
                     surface_masks=surface.numpy(),
                     poi_metadata=poi_metadata,  # ← Passiere die POI-Metadaten an die Funktion
                     poi_save_dir=os.path.join(args.save_dir, "poi_files"),
+                    crop_rate=crop_rate,
+                    crop_begin=crop_begin
                 )
                 total_mre_projected.append(mre_proj)
                 total_hits_projected += hits_proj
